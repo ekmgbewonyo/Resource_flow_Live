@@ -23,6 +23,11 @@ class VerifyUserVerified
             ], 401);
         }
 
+        // Angel donors bypass verification (no ID required)
+        if ($user->role === 'angel_donor') {
+            return $next($request);
+        }
+
         if (!$user->is_verified) {
             return response()->json([
                 'message' => 'Your account is not verified. Please complete verification to access this feature.',

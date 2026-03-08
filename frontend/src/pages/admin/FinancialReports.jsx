@@ -1,81 +1,112 @@
 // ## Financial Reports Component
-// ## Comprehensive financial reporting and analytics for the platform
-import React, { useMemo, useState } from 'react';
-import { Package, Download, Filter } from 'lucide-react';
+// ## Comprehensive financial reporting from donations + warehouses API
+import React, { useMemo, useState, useEffect } from 'react';
+import { Package, Download, Filter, Loader2 } from 'lucide-react';
 import { formatGHC } from '../../utils/currency';
-import { WarehouseModel } from '../../models/WarehouseModel';
+import { donationApi, warehouseApi } from '../../services/api';
 import { downloadCsv } from '../../utils/exportCsv';
 import { ResourceValueChart } from '../../components/charts/ResourceValueChart';
 import { Button } from '../../components/ui/Button';
 
+// Derive category from donation item name
+const deriveCategory = (item) => {
+  if (!item) return 'Other';
+  const lower = String(item).toLowerCase();
+  if (lower.includes('rice') || lower.includes('maize') || lower.includes('food') || lower.includes('oil') || lower.includes('grain')) return 'Food';
+  if (lower.includes('medicine') || lower.includes('medical') || lower.includes('paracetamol') || lower.includes('antibiotic')) return 'Medicine';
+  if (lower.includes('equipment') || lower.includes('pump') || lower.includes('solar')) return 'Equipment';
+  return 'Other';
+};
+
 const FinancialReports = () => {
-  const [dateRange, setDateRange] = useState('all');
+  const [donations, setDonations] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  // ## Get inventory data
-  const inventory = WarehouseModel.getAllInventory();
-  const warehouses = WarehouseModel.getAllWarehouses();
-
-  // ## Calculate financial metrics
-  const financialMetrics = useMemo(() => {
-    // ## Total locked value (only from verified/locked items)
-    const totalLockedValue = WarehouseModel.calculateTotalStockpileValue();
-    
-    // ## Total estimated value (from all items with market prices)
-    const totalEstimatedValue = inventory.reduce((sum, item) => {
-      if (item.marketPrice) {
-        return sum + (item.marketPrice * item.quantity);
+  // ## Fetch donations and warehouses from API
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [donationsData, warehousesData] = await Promise.all([
+          donationApi.getAll({ receipt_confirmed: true }),
+          warehouseApi.getAll(),
+        ]);
+        setDonations(Array.isArray(donationsData) ? donationsData : []);
+        setWarehouses(Array.isArray(warehousesData) ? warehousesData : []);
+      } catch (err) {
+        console.error('Error fetching financial data:', err);
+        setError('Failed to load financial data.');
+        setDonations([]);
+        setWarehouses([]);
+      } finally {
+        setLoading(false);
       }
-      return sum;
+    };
+    fetchData();
+  }, []);
+
+  // ## Goods donations only (inventory value)
+  const inventory = useMemo(
+    () => donations.filter((d) => d.type === 'Goods'),
+    [donations]
+  );
+
+  // ## Calculate financial metrics from donations
+  const financialMetrics = useMemo(() => {
+    const totalLockedValue = inventory
+      .filter((d) => d.price_status === 'Locked' && (d.audited_price || d.value))
+      .reduce((sum, d) => sum + ((d.audited_price || d.value || 0) * (d.quantity || 0)), 0);
+
+    const totalEstimatedValue = inventory.reduce((sum, d) => {
+      const price = d.market_price || d.audited_price || d.value;
+      return sum + (price ? price * (d.quantity || 0) : 0);
     }, 0);
 
-    // ## Value by category
-    const valueByCategory = inventory.reduce((acc, item) => {
-      const value = item.priceStatus === 'Locked' && item.value
-        ? item.value * item.quantity
-        : item.marketPrice
-        ? item.marketPrice * item.quantity
-        : 0;
-      
-      if (!acc[item.category]) {
-        acc[item.category] = { locked: 0, estimated: 0, total: 0 };
+    const valueByCategory = inventory.reduce((acc, d) => {
+      const category = deriveCategory(d.item);
+      const value = d.price_status === 'Locked' && (d.audited_price || d.value)
+        ? (d.audited_price || d.value) * (d.quantity || 0)
+        : (d.market_price || d.audited_price || d.value || 0) * (d.quantity || 0);
+
+      if (!acc[category]) acc[category] = { locked: 0, estimated: 0, total: 0 };
+      if (d.price_status === 'Locked' && (d.audited_price || d.value)) {
+        acc[category].locked += (d.audited_price || d.value) * (d.quantity || 0);
+      } else if (d.market_price || d.audited_price || d.value) {
+        acc[category].estimated += (d.market_price || d.audited_price || d.value) * (d.quantity || 0);
       }
-      
-      if (item.priceStatus === 'Locked' && item.value) {
-        acc[item.category].locked += item.value * item.quantity;
-      } else if (item.marketPrice) {
-        acc[item.category].estimated += item.marketPrice * item.quantity;
-      }
-      acc[item.category].total += value;
+      acc[category].total += value;
       return acc;
     }, {});
 
-    // ## Value by price status
     const valueByStatus = {
       Locked: inventory
-        .filter(item => item.priceStatus === 'Locked' && item.value)
-        .reduce((sum, item) => sum + (item.value * item.quantity), 0),
+        .filter((d) => d.price_status === 'Locked' && (d.audited_price || d.value))
+        .reduce((sum, d) => sum + ((d.audited_price || d.value) * (d.quantity || 0)), 0),
       'Pending Review': inventory
-        .filter(item => item.priceStatus === 'Pending Review' && item.marketPrice)
-        .reduce((sum, item) => sum + (item.marketPrice * item.quantity), 0),
+        .filter((d) => d.price_status === 'Pending Review' && (d.market_price || d.audited_price || d.value))
+        .reduce((sum, d) => sum + ((d.market_price || d.audited_price || d.value || 0) * (d.quantity || 0)), 0),
       Estimated: inventory
-        .filter(item => item.priceStatus === 'Estimated' && item.marketPrice)
-        .reduce((sum, item) => sum + (item.marketPrice * item.quantity), 0),
+        .filter((d) => d.price_status === 'Estimated' && (d.market_price || d.audited_price || d.value))
+        .reduce((sum, d) => sum + ((d.market_price || d.audited_price || d.value || 0) * (d.quantity || 0)), 0),
     };
 
-    // ## Value by warehouse
-    const valueByWarehouse = warehouses.map(warehouse => {
-      const warehouseItems = inventory.filter(item => item.colocation.facility === warehouse.name);
+    const valueByWarehouse = warehouses.map((w) => {
+      const warehouseItems = inventory.filter(
+        (d) => d.warehouse?.name === w.name || d.colocation_facility === w.name
+      );
       const lockedValue = warehouseItems
-        .filter(item => item.priceStatus === 'Locked' && item.value)
-        .reduce((sum, item) => sum + (item.value * item.quantity), 0);
+        .filter((d) => d.price_status === 'Locked' && (d.audited_price || d.value))
+        .reduce((sum, d) => sum + ((d.audited_price || d.value) * (d.quantity || 0)), 0);
       const estimatedValue = warehouseItems
-        .filter(item => item.marketPrice && item.priceStatus !== 'Locked')
-        .reduce((sum, item) => sum + (item.marketPrice * item.quantity), 0);
-      
+        .filter((d) => d.price_status !== 'Locked' && (d.market_price || d.audited_price || d.value))
+        .reduce((sum, d) => sum + ((d.market_price || d.audited_price || d.value || 0) * (d.quantity || 0)), 0);
       return {
-        name: warehouse.name,
-        region: warehouse.region,
+        name: w.name,
+        region: w.region || '',
         lockedValue,
         estimatedValue,
         totalValue: lockedValue + estimatedValue,
@@ -83,11 +114,10 @@ const FinancialReports = () => {
       };
     });
 
-    // ## Count items by status
     const itemsByStatus = {
-      Locked: inventory.filter(item => item.priceStatus === 'Locked').length,
-      'Pending Review': inventory.filter(item => item.priceStatus === 'Pending Review').length,
-      Estimated: inventory.filter(item => item.priceStatus === 'Estimated').length,
+      Locked: inventory.filter((d) => d.price_status === 'Locked').length,
+      'Pending Review': inventory.filter((d) => d.price_status === 'Pending Review').length,
+      Estimated: inventory.filter((d) => d.price_status === 'Estimated').length,
     };
 
     return {
@@ -111,15 +141,18 @@ const FinancialReports = () => {
     }));
   }, [financialMetrics.valueByCategory]);
 
-  // ## Filter warehouse data
-  const filteredWarehouses = selectedCategory === 'All'
-    ? financialMetrics.valueByWarehouse
-    : financialMetrics.valueByWarehouse.filter(wh => {
-        const items = inventory.filter(item => 
-          item.colocation.facility === wh.name && item.category === selectedCategory
-        );
-        return items.length > 0;
-      });
+  // ## Filter warehouse data by category
+  const filteredWarehouses =
+    selectedCategory === 'All'
+      ? financialMetrics.valueByWarehouse
+      : financialMetrics.valueByWarehouse.filter((wh) => {
+          const items = inventory.filter(
+            (d) =>
+              (d.warehouse?.name === wh.name || d.colocation_facility === wh.name) &&
+              deriveCategory(d.item) === selectedCategory
+          );
+          return items.length > 0;
+        });
 
   // ## Export financial report as CSV
   const handleExport = () => {
@@ -163,6 +196,30 @@ const FinancialReports = () => {
 
   // Capped percentage helper (never exceeds 100)
   const safePercent = (value) => Math.min(Math.round(value || 0), 100);
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 mx-auto text-blue-500 animate-spin mb-4" />
+          <p className="text-slate-600">Loading financial data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p className="text-red-700 font-medium">{error}</p>
+          <Button className="mt-4" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 bg-white min-h-screen overflow-y-auto pb-8">

@@ -19,9 +19,9 @@ class ImpactDashboardController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->isCorporate()) {
+        if (!$user->isDonorInstitution()) {
             return response()->json([
-                'message' => 'Only corporate users can access impact dashboard',
+                'message' => 'Only donor institutions can access impact dashboard',
             ], 403);
         }
 

@@ -35,6 +35,8 @@ export interface Donation {
   description?: string;
   status: 'Pending' | 'Verified' | 'Allocated' | 'Delivered' | 'Rejected';
   date_received?: string;
+  receipt_confirmed_at?: string;
+  receipt_confirmed_by?: number;
   warehouse_id?: number;
   warehouse?: Warehouse;
   colocation_facility?: string;
@@ -148,7 +150,7 @@ export interface LocationUpdate {
 // ## Financial Types
 export interface Financial {
   id: number;
-  transaction_type: 'Donation' | 'Allocation' | 'Expense' | 'Refund';
+  transaction_type: 'Donation' | 'Allocation' | 'Expense' | 'Refund' | 'Project Funding' | 'General Support';
   user_id?: number;
   user?: User;
   donation_id?: number;
@@ -158,7 +160,7 @@ export interface Financial {
   amount: number;
   currency: string;
   payment_reference?: string;
-  payment_method?: 'card' | 'mobile_money' | 'bank_transfer' | 'cash';
+  payment_method?: 'card' | 'mobile_money' | 'bank_transfer' | 'cash' | 'paystack';
   status: 'Pending' | 'Completed' | 'Failed' | 'Refunded';
   description?: string;
   transaction_date: string;

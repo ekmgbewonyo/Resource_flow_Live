@@ -40,7 +40,7 @@ export const RoleProtectedRoute = ({
   }
 
   // Block Request/Donate for unverified supplier/recipient/ngo
-  if (requiresVerification && !isVerified && ['supplier', 'recipient', 'ngo', 'donor'].includes(role)) {
+  if (requiresVerification && !isVerified && ['ngo', 'donor_institution', 'donor_individual', 'recipient'].includes(role)) {
     return <Navigate to="/verification-wait" replace />;
   }
 

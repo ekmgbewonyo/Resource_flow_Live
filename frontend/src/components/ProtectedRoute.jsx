@@ -33,7 +33,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   // ## Redirect unverified supplier/recipient to verification-wait first.
   // ## Exception: allow through if already ON verification-wait (avoid redirect loop), or if they chose "Go to Dashboard"/"Reupload".
   const isOnVerificationWait = location.pathname === '/verification-wait';
-  if (!isVerified && ['supplier', 'recipient', 'ngo', 'donor'].includes(role)) {
+  if (!isVerified && ['ngo', 'donor_institution', 'donor_individual', 'recipient'].includes(role)) {
     const allowFromVerificationWait = sessionStorage.getItem('allowUnverifiedDashboard');
     if (!allowFromVerificationWait && !isOnVerificationWait) {
       return <Navigate to="/verification-wait" replace />;

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'requestor' | 'donor' | 'supplier' | 'auditor' | 'ngo' | 'corporate' | 'field_agent';
+export type UserRole = 'admin' | 'requestor' | 'ngo' | 'donor_institution' | 'donor_individual' | 'angel_donor' | 'auditor' | 'field_agent';
 
 import { VulnerabilityScore, Donation, VerificationDocument, Allocation } from './backend';
 
@@ -40,7 +40,7 @@ export interface RegisterData {
   email: string;
   password: string;
   password_confirmation: string;
-  role: 'requestor' | 'donor' | 'supplier';
+  role: 'requestor' | 'ngo' | 'donor_institution' | 'donor_individual' | 'angel_donor';
   organization?: string;
   phone?: string;
 }

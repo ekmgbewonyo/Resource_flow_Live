@@ -604,6 +604,58 @@ export const ghanaCardApi = {
     const response = await apiClient.post('/verify-ghana-card', params);
     return response.data;
   },
+
+  /** Verify with Ghana Card image + selfie (capture flow). Accepts base64 or FormData. */
+  verifyWithImages: async (params: {
+    ghana_card_base64?: string;
+    ghana_card_image?: File;
+    user_photo_base64?: string;
+    user_photo?: File;
+    firstname: string;
+    lastname: string;
+    consent_given?: boolean;
+  }): Promise<{
+    verified: boolean;
+    error?: string;
+    error_code?: string;
+    request_id?: string;
+    national_id?: string;
+  }> => {
+    const hasFiles = !!(params.ghana_card_image || params.user_photo);
+    if (hasFiles) {
+      const formData = new FormData();
+      if (params.ghana_card_image) formData.append('ghana_card_image', params.ghana_card_image);
+      else if (params.ghana_card_base64) formData.append('ghana_card_base64', params.ghana_card_base64);
+      if (params.user_photo) formData.append('user_photo', params.user_photo);
+      else if (params.user_photo_base64) formData.append('user_photo_base64', params.user_photo_base64);
+      formData.append('firstname', params.firstname);
+      formData.append('lastname', params.lastname);
+      formData.append('consent_given', String(!!params.consent_given));
+      const response = await apiClient.post('/verify-ghana-card-with-images', formData);
+      return response.data;
+    }
+    const response = await apiClient.post('/verify-ghana-card-with-images', {
+      ghana_card_base64: params.ghana_card_base64,
+      user_photo_base64: params.user_photo_base64,
+      firstname: params.firstname,
+      lastname: params.lastname,
+      consent_given: !!params.consent_given,
+    });
+    return response.data;
+  },
+
+  /** Store QoreID SDK result (requires auth). Call after SDK completes. */
+  storeQoreIdResult: async (params: {
+    customer_reference: string;
+    workflow_id?: string;
+    status: 'verified' | 'pending' | 'failed';
+    national_id?: string;
+    firstname?: string;
+    lastname?: string;
+  }): Promise<{ verified: boolean; document_id: number; message: string }> => {
+    const response = await apiClient.post('/verify-ghana-card-qoreid-result', params);
+    return response.data;
+  },
 };
 
 // Verification Documents API
@@ -787,7 +839,7 @@ export const contributionApi = {
 
 // Donations API
 export const donationApi = {
-  getAll: async (params?: { status?: string; user_id?: number; warehouse_id?: number; aid_request_id?: number }): Promise<Donation[]> => {
+  getAll: async (params?: { status?: string; user_id?: number; warehouse_id?: number; aid_request_id?: number; receipt_confirmed?: boolean }): Promise<Donation[]> => {
     const response = await apiClient.get<{ data?: Donation[] } | Donation[]>('/donations', { params });
     const data = response.data;
     return Array.isArray(data) ? data : (data?.data ?? []);
@@ -813,8 +865,105 @@ export const donationApi = {
     return response.data;
   },
 
+  confirmReceipt: async (id: number): Promise<Donation> => {
+    const response = await apiClient.post<Donation>(`/donations/${id}/confirm-receipt`);
+    return response.data;
+  },
+
   assignWarehouse: async (id: number, data: { warehouse_id: number; colocation_facility?: string; colocation_sub_location?: string }): Promise<Donation> => {
     const response = await apiClient.put<Donation>(`/donations/${id}/assign-warehouse`, data);
+    return response.data;
+  },
+
+  getCorporateTaxStats: async (): Promise<CorporateTaxStats> => {
+    const response = await apiClient.get<CorporateTaxStats>('/donations/corporate-tax-stats');
+    return response.data;
+  },
+
+  updateTaxProfile: async (assessableAnnualIncome: number): Promise<{ message: string; assessable_annual_income: number }> => {
+    const response = await apiClient.put('/donations/tax-profile', { assessable_annual_income: assessableAnnualIncome });
+    return response.data;
+  },
+
+  downloadCertificate: async (donationId: number): Promise<void> => {
+    const response = await apiClient.get(`/donations/${donationId}/certificate`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: response.headers['content-type'] || 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `donation-certificate-${donationId}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+};
+
+export interface CorporateTaxStats {
+  assessable_annual_income: number;
+  max_deductible_limit: number;
+  donations_ytd: number;
+  remaining_deductible_cap: number;
+  is_over_limit: boolean;
+  tax_rate_percent: number;
+}
+
+// Trips API - Real-time driver tracking & last-mile verification
+export interface Trip {
+  id: number;
+  driver_id: number;
+  request_id: number;
+  allocation_id?: number;
+  delivery_route_id?: number;
+  status: 'pending' | 'started' | 'arrived' | 'completed';
+  current_lat?: number;
+  current_lng?: number;
+  started_at?: string;
+  arrived_at?: string;
+  completed_at?: string;
+  driver?: { id: number; name: string; email: string };
+  request?: { id: number; title: string; user?: { name: string } };
+  allocation?: unknown;
+  delivery_proof?: unknown;
+}
+
+export const tripApi = {
+  getAll: async (params?: { status?: string }): Promise<Trip[]> => {
+    const response = await apiClient.get<Trip[] | { data: Trip[] }>('/trips', { params });
+    const data = response.data;
+    return Array.isArray(data) ? data : (data?.data ?? []);
+  },
+
+  getById: async (id: number): Promise<Trip> => {
+    const response = await apiClient.get<Trip>(`/trips/${id}`);
+    return response.data;
+  },
+
+  create: async (data: { request_id: number; allocation_id?: number; delivery_route_id?: number }): Promise<Trip> => {
+    const response = await apiClient.post<Trip>('/trips', data);
+    return response.data;
+  },
+
+  updateLocation: async (tripId: number, lat: number, lng: number): Promise<{ trip_id: number; lat: number; lng: number; status: string }> => {
+    const response = await apiClient.put(`/trips/${tripId}/update-location`, { lat, lng });
+    return response.data;
+  },
+
+  arrive: async (tripId: number): Promise<Trip> => {
+    const response = await apiClient.post<Trip>(`/trips/${tripId}/arrive`);
+    return response.data;
+  },
+
+  complete: async (tripId: number, data: {
+    gha_card_path?: string;
+    recipient_photo_path?: string;
+    signature_path?: string;
+    recipient_comments?: string;
+    recipient_confirmed: boolean;
+    recipient_ghana_card_verified?: boolean;
+    recipient_ghana_card_number?: string;
+  }): Promise<Trip> => {
+    const response = await apiClient.post<Trip>(`/trips/${tripId}/complete`, data);
     return response.data;
   },
 };
@@ -822,7 +971,38 @@ export const donationApi = {
 // CSR Matchmaking & Impact Tracking APIs
 import { Project, CSRPartnership, MatchResult, ImpactDashboardData } from '../types/csr';
 
+export interface NGOListItem {
+  id: number;
+  name: string;
+  organization: string | null;
+  email: string;
+  phone: string | null;
+  address: string | null;
+  verification_tier: string | null;
+  reputation_score: number;
+  completion_rate: number;
+  total_projects: number;
+  completed_projects: number;
+  total_lives_impacted: number;
+  projects: Array<{
+    id: number;
+    title: string;
+    description: string;
+    status: string;
+    sdg_goals: number[];
+    target_amount: number;
+    funded_amount: number;
+    funding_progress: number;
+    impact_proofs_count: number;
+  }>;
+}
+
 export const matchmakingApi = {
+  getNGOs: async (params?: { region?: string; sdg?: number }): Promise<{ ngos: NGOListItem[] }> => {
+    const response = await apiClient.get<{ ngos: NGOListItem[] }>('/matchmaking/ngos', { params });
+    return response.data;
+  },
+
   getMatches: async (params?: { sdg_goals?: number[]; location?: string; limit?: number }): Promise<{ matches: MatchResult[] }> => {
     const response = await apiClient.get<{ matches: MatchResult[] }>('/matchmaking/matches', { params });
     return response.data;
@@ -841,6 +1021,47 @@ export const impactApi = {
   },
 };
 
+export interface ProjectBudgetItem {
+  category: 'material' | 'transportation' | 'admin' | 'labor';
+  item_name: string;
+  quantity: number;
+  unit_cost: number;
+}
+
+export interface ProjectCreateData {
+  title: string;
+  description: string;
+  location?: string;
+  location_gps?: string;
+  cover_photo_path?: string;
+  need_type?: 'funding' | 'items' | 'both';
+  sdg_goals?: number[];
+  start_date?: string;
+  end_date?: string;
+  budgets: ProjectBudgetItem[];
+  proof_documents?: string[];
+}
+
+export const organizationApi = {
+  get: async (): Promise<{ organization: any }> => {
+    const response = await apiClient.get('/organization');
+    const data = response.data;
+    if (data?.organization !== undefined) return data;
+    if (data?.id && data?.name) return { organization: data };
+    return { organization: null };
+  },
+
+  create: async (data: { name: string; registration_number?: string; tin?: string; logo_path?: string; cover_photo_path?: string; documents_path?: string[] }): Promise<any> => {
+    const response = await apiClient.post('/organization', data);
+    return response.data;
+  },
+
+  update: async (data: Partial<{ name: string; registration_number?: string; tin?: string; logo_path?: string; cover_photo_path?: string; documents_path?: string[] }>): Promise<any> => {
+    const response = await apiClient.put('/organization', data);
+    return response.data;
+  },
+};
+
 export const projectApi = {
   getAll: async (params?: { status?: string; sdg_goals?: number[] }): Promise<any> => {
     const response = await apiClient.get('/projects', { params });
@@ -852,13 +1073,18 @@ export const projectApi = {
     return response.data;
   },
 
-  create: async (data: Partial<Project>): Promise<Project> => {
-    const response = await apiClient.post<Project>('/projects', data);
+  create: async (data: ProjectCreateData): Promise<{ project: Project; message: string }> => {
+    const response = await apiClient.post<{ project: Project; message: string }>('/projects', data);
     return response.data;
   },
 
   update: async (id: number, data: Partial<Project>): Promise<Project> => {
     const response = await apiClient.put<Project>(`/projects/${id}`, data);
+    return response.data;
+  },
+
+  submit: async (id: number): Promise<{ project: Project; message: string }> => {
+    const response = await apiClient.post<{ project: Project; message: string }>(`/projects/${id}/submit`);
     return response.data;
   },
 };

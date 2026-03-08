@@ -2,7 +2,7 @@
 #
 # ResourceFlow - VPS Remote Deployment Script
 # Run this script ON your VPS after uploading the project.
-# Based on Deployment_Guide.md Section 9 (Hostinger VPS).
+# See VPS_UPLOAD.md for full Hostinger VPS deployment guide.
 #
 # Prerequisites: Ubuntu 22.04, root or sudo access
 # Usage: ./vps-deploy-remote.sh
@@ -10,7 +10,7 @@
 #
 # Set these before running (or export from vps-deploy-config):
 #   DOMAIN, API_DOMAIN, DB_PASSWORD, PAYSTACK_PUBLIC_KEY, PAYSTACK_SECRET_KEY
-#   CERTBOT_EMAIL (for SSL)
+#   QOREID_CLIENT_ID, QOREID_SECRET (optional), CERTBOT_EMAIL (for SSL)
 #
 
 set -e
@@ -21,7 +21,8 @@ API_DOMAIN="${API_DOMAIN:-api.yourdomain.com}"
 DB_PASSWORD="${DB_PASSWORD:?Set DB_PASSWORD}"
 PAYSTACK_PUBLIC_KEY="${PAYSTACK_PUBLIC_KEY:-pk_live_placeholder}"
 PAYSTACK_SECRET_KEY="${PAYSTACK_SECRET_KEY:-sk_live_placeholder}"
-QOREID_SECRET_KEY="${QOREID_SECRET_KEY:-}"
+QOREID_CLIENT_ID="${QOREID_CLIENT_ID:-}"
+QOREID_SECRET="${QOREID_SECRET:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-admin@${DOMAIN}}"
 APP_PATH="/var/www/resourceflow"
 
@@ -75,7 +76,7 @@ setup_backend() {
   echo "📦 Setting up backend..."
   cd "$APP_PATH/backend"
 
-  [ -f .env ] || cp .env.example .env
+  [ -f .env ] || cp .env.production.example .env 2>/dev/null || cp .env.example .env
 
   # Write .env
   cat > .env << EOF
@@ -102,7 +103,8 @@ SESSION_DRIVER=file
 SESSION_LIFETIME=120
 PAYSTACK_PUBLIC_KEY=${PAYSTACK_PUBLIC_KEY}
 PAYSTACK_SECRET_KEY=${PAYSTACK_SECRET_KEY}
-QOREID_SECRET_KEY=${QOREID_SECRET_KEY}
+QOREID_CLIENT_ID=${QOREID_CLIENT_ID}
+QOREID_SECRET=${QOREID_SECRET}
 EOF
 
   composer install --no-dev --optimize-autoloader --no-interaction

@@ -5,6 +5,7 @@ import { Package, Plus, TrendingUp, CheckCircle, ShieldCheck, AlertCircle, Map, 
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { DonationTracker } from '../../components/shared/DonationTracker';
+import { CorporateTaxWidget } from '../../components/donor/CorporateTaxWidget';
 import { StatusBadge } from '../../components/shared/StatusBadge';
 import { Button } from '../../components/ui/Button';
 import { GhanaSVGHeatMap } from '../../components/map/GhanaSVGHeatMap';
@@ -12,7 +13,7 @@ import { donationApi } from '../../services/api';
 import PaymentModal from '../../components/payment/PaymentModal';
 
 const SupplierDashboard = () => {
-  const { user, isVerified } = useAuth();
+  const { user, isVerified, role } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -202,6 +203,13 @@ const SupplierDashboard = () => {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Corporate Tax Widget - donor_institution only */}
+      {role === 'donor_institution' && (
+        <div className="max-w-md">
+          <CorporateTaxWidget />
         </div>
       )}
 

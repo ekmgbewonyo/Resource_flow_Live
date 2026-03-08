@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
 import { FileUpload } from '../../components/ui/FileUpload';
-import { ShieldCheck, FileText, Loader2 } from 'lucide-react';
+import { ShieldCheck, FileText, Loader2, Camera } from 'lucide-react';
 import GhanaCardVerificationBanner from '../../components/verification/GhanaCardVerificationBanner';
+import GhanaCardCapture from '../../components/verification/GhanaCardCapture';
 import { authApi, ghanaCardApi, verificationDocumentApi } from '../../services/api';
 
 const Register = () => {
-  const [role, setRole] = useState('requestor');
+  const [role, setRole] = useState('donor_individual');
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -27,6 +28,9 @@ const Register = () => {
   const [verificationResult, setVerificationResult] = useState(null);
   const [verifying, setVerifying] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [useCapture, setUseCapture] = useState(false);
+  const [ghanaCardVerifiedViaCapture, setGhanaCardVerifiedViaCapture] = useState(false);
+  const [captureVerificationResult, setCaptureVerificationResult] = useState(null);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -73,20 +77,30 @@ const Register = () => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!ghanaCardFile) {
-      alert('Please upload your Ghana Card document.');
+    if (role !== 'angel_donor') {
+      if (!ghanaCardVerifiedViaCapture && !ghanaCardFile) {
+        alert('Please upload your Ghana Card document or complete the camera capture verification.');
+        return;
+      }
+      if (!ghanaCardVerifiedViaCapture && !formData.ghanaCard?.trim()) {
+        alert('Please provide your Ghana Card number.');
+        return;
+      }
+      if (!consentGiven) {
+        alert('Please confirm your consent for Ghana Card verification (required under Ghana Data Protection Act).');
+        return;
+      }
+    }
+    if (role === 'ngo' && !formData.organization?.trim()) {
+      alert('Please enter your NGO / Organization name.');
       return;
     }
-    if (!formData.ghanaCard?.trim()) {
-      alert('Please provide your Ghana Card number.');
+    if (role === 'ngo' && !businessRegFile) {
+      alert('Please upload your NGO Registration (RG) document.');
       return;
     }
-    if (!consentGiven) {
-      alert('Please confirm your consent for Ghana Card verification (required under Ghana Data Protection Act).');
-      return;
-    }
-    if ((role === 'supplier' || role === 'donor') && !businessRegFile) {
-      alert('Please upload your Business Registration document.');
+    if (role === 'donor_institution' && !formData.organization?.trim()) {
+      alert('Please enter your organization / company name.');
       return;
     }
     if (formData.password !== formData.passwordConfirmation) {
@@ -112,8 +126,20 @@ const Register = () => {
 
       const registerResult = await authApi.register(registerData);
       authApi.setToken(registerResult.token);
+      if (registerResult.token) {
+        localStorage.setItem('auth_token', registerResult.token);
+      }
 
-      if (ghanaCardFile) {
+      if (role !== 'angel_donor' && ghanaCardVerifiedViaCapture && captureVerificationResult) {
+        await ghanaCardApi.storeQoreIdResult({
+          customer_reference: captureVerificationResult.request_id || `reg_${Date.now()}`,
+          workflow_id: captureVerificationResult.request_id,
+          status: 'verified',
+          national_id: captureVerificationResult.national_id,
+          firstname: formData.firstName.trim(),
+          lastname: formData.lastName.trim(),
+        });
+      } else if (role !== 'angel_donor' && ghanaCardFile) {
         await verificationDocumentApi.upload(
           ghanaCardFile,
           'Ghana Card',
@@ -126,10 +152,10 @@ const Register = () => {
         );
       }
 
-      if ((role === 'supplier' || role === 'donor') && businessRegFile) {
+      if ((role === 'ngo' || role === 'donor_institution') && businessRegFile) {
         await verificationDocumentApi.upload(
           businessRegFile,
-          'Business Registration',
+          role === 'ngo' ? 'NGO Registration (RG)' : 'Business Registration',
           formData.businessReg
         );
       }
@@ -138,7 +164,9 @@ const Register = () => {
       const loginResult = await login(formData.email, formData.password);
       
       if (loginResult.success) {
-        alert('Registration successful! Your documents are being reviewed. You will be notified once verified.');
+        alert(role === 'angel_donor'
+          ? 'Registration successful! You can donate up to GH₵5,000 per donation. No ID verification required.'
+          : 'Registration successful! Your documents are being reviewed. You will be notified once verified.');
         navigate('/dashboard');
       }
     } catch (error) {
@@ -172,7 +200,7 @@ const Register = () => {
           {/* Role Selection */}
           <div className="space-y-3 p-4 bg-slate-50 rounded-lg">
             <p className="text-sm font-semibold text-slate-700 mb-2">Account Type</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -187,31 +215,21 @@ const Register = () => {
                 <input
                   type="radio"
                   name="role"
-                  checked={role === 'corporate'}
-                  onChange={() => setRole('corporate')}
+                  checked={role === 'donor_institution'}
+                  onChange={() => setRole('donor_institution')}
                   className="text-emerald-600"
                 />
-                <span className="font-medium">Corporate</span>
+                <span className="font-medium">Donor (Institution)</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
                   name="role"
-                  checked={role === 'supplier'}
-                  onChange={() => setRole('supplier')}
+                  checked={role === 'donor_individual'}
+                  onChange={() => setRole('donor_individual')}
                   className="text-emerald-600"
                 />
-                <span className="font-medium">Supplier</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="role"
-                  checked={role === 'donor'}
-                  onChange={() => setRole('donor')}
-                  className="text-emerald-600"
-                />
-                <span className="font-medium">Donor</span>
+                <span className="font-medium">Donor (Individual)</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -223,7 +241,32 @@ const Register = () => {
                 />
                 <span className="font-medium">Recipient / Requestor</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="role"
+                  checked={role === 'angel_donor'}
+                  onChange={() => setRole('angel_donor')}
+                  className="text-emerald-600"
+                />
+                <span className="font-medium">Angel Donor</span>
+              </label>
             </div>
+            {role === 'ngo' && (
+              <p className="text-xs text-slate-600 mt-2">
+                NGOs receive assistance from Donors. Create fundable projects and get support from Donor/Institutions.
+              </p>
+            )}
+            {role === 'donor_institution' && (
+              <p className="text-xs text-slate-600 mt-2">
+                Corporate donors fund NGO projects. Find and support NGOs through the platform.
+              </p>
+            )}
+            {role === 'angel_donor' && (
+              <p className="text-xs text-slate-600 mt-2">
+                Quick sign-up, no ID verification. Donations capped at GH₵5,000 per donation.
+              </p>
+            )}
           </div>
 
           {/* Common Fields */}
@@ -257,15 +300,21 @@ const Register = () => {
             className="w-full border p-2 rounded border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             required
           />
-          {(role === 'ngo' || role === 'corporate') && (
-            <input
-              type="text"
-              name="organization"
-              placeholder={role === 'ngo' ? 'Organization / NGO Name' : 'Company Name'}
-              value={formData.organization}
-              onChange={handleChange}
-              className="w-full border p-2 rounded border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
+          {(role === 'ngo' || role === 'donor_institution') && (
+            <div className="w-full">
+              <input
+                type="text"
+                name="organization"
+                placeholder={role === 'ngo' ? 'NGO / Organization Name *' : 'Organization / Company Name *'}
+                value={formData.organization}
+                onChange={handleChange}
+                className="w-full border p-2 rounded border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                required
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                {role === 'ngo' ? 'Required for NGO accounts' : 'Required for institutional donor accounts'}
+              </p>
+            </div>
           )}
           <div className="grid grid-cols-2 gap-4">
             <input
@@ -290,7 +339,8 @@ const Register = () => {
             />
           </div>
 
-          {/* Document Upload Section */}
+          {/* Document Upload Section - not required for Angel Donors */}
+          {role !== 'angel_donor' && (
           <div className="border-t border-slate-200 pt-6 mt-6">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="text-emerald-600" size={20} />
@@ -350,33 +400,98 @@ const Register = () => {
                   onDismiss={() => setVerificationResult(null)}
                 />
               )}
-              <FileUpload
-                label="Ghana Card Document"
-                name="ghanaCardFile"
-                accept="image/*,.pdf"
-                required={false}
-                value={ghanaCardFile}
-                onChange={setGhanaCardFile}
-                maxSizeMB={5}
-                description="Upload a clear photo or scan of your Ghana Card (front and back if applicable)"
-              />
+              <div className="flex gap-2 mb-4">
+                <Button
+                  type="button"
+                  variant={!useCapture ? 'primary' : 'outline'}
+                  onClick={() => setUseCapture(false)}
+                  icon={ShieldCheck}
+                >
+                  Upload Document
+                </Button>
+                <Button
+                  type="button"
+                  variant={useCapture ? 'primary' : 'outline'}
+                  onClick={() => setUseCapture(true)}
+                  icon={Camera}
+                >
+                  Capture with Camera
+                </Button>
+              </div>
+              {ghanaCardVerifiedViaCapture ? (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
+                  <span className="text-emerald-600 font-medium">✓ Ghana Card verified via camera capture.</span>
+                </div>
+              ) : useCapture ? (
+                <GhanaCardCapture
+                  firstname={formData.firstName}
+                  lastname={formData.lastName}
+                  consentGiven={consentGiven}
+                  onVerified={(result) => {
+                    setGhanaCardVerifiedViaCapture(true);
+                    setCaptureVerificationResult(result);
+                    setVerificationResult({ type: 'verified', message: 'Ghana Card verified via camera capture.' });
+                  }}
+                  onError={() => setVerificationResult(null)}
+                  disabled={submitting}
+                />
+              ) : (
+                <FileUpload
+                  label="Ghana Card Document"
+                  name="ghanaCardFile"
+                  accept="image/*,.pdf"
+                  required={false}
+                  value={ghanaCardFile}
+                  onChange={setGhanaCardFile}
+                  maxSizeMB={5}
+                  description="Upload a clear photo or scan of your Ghana Card (front and back if applicable)"
+                />
+              )}
             </div>
 
-            {/* Conditional Business Registration (Supplier/Donor) */}
-            {(role === 'supplier' || role === 'donor') && (
+            {/* NGO: Registration (RG) - Required */}
+            {role === 'ngo' && (
               <div className="space-y-4 animate-in fade-in duration-300">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-600">
-                    Business Registration Number
+                    NGO Registration Number (RG) *
                   </label>
                   <input
                     type="text"
                     name="businessReg"
-                    placeholder="Enter BN Number"
+                    placeholder="Enter RG Number"
                     value={formData.businessReg}
                     onChange={handleChange}
                     className="w-full border p-2 rounded border-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    // Validation handled in handleSubmit
+                  />
+                </div>
+                <FileUpload
+                  label="NGO Registration Document (RG) *"
+                  name="businessRegFile"
+                  accept="image/*,.pdf"
+                  required={false}
+                  value={businessRegFile}
+                  onChange={setBusinessRegFile}
+                  maxSizeMB={5}
+                  description="Upload a clear copy of your NGO Registration Certificate from Registrar General"
+                />
+              </div>
+            )}
+
+            {/* Donor (Institution): Business Registration - Optional */}
+            {role === 'donor_institution' && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-600">
+                    Business Registration Number (BN)
+                  </label>
+                  <input
+                    type="text"
+                    name="businessReg"
+                    placeholder="Enter BN Number (optional)"
+                    value={formData.businessReg}
+                    onChange={handleChange}
+                    className="w-full border p-2 rounded border-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <FileUpload
@@ -387,16 +502,17 @@ const Register = () => {
                   value={businessRegFile}
                   onChange={setBusinessRegFile}
                   maxSizeMB={5}
-                  description="Upload a clear copy of your Business Registration Certificate"
+                  description="Upload a clear copy of your Business Registration Certificate (optional)"
                 />
               </div>
             )}
           </div>
+          )}
 
           {/* Address Details */}
           <textarea
             name="address"
-            placeholder={role === 'requestor' ? 'Delivery Address' : 'Business Address'}
+            placeholder={role === 'requestor' ? 'Delivery Address' : role === 'ngo' ? 'NGO / Office Address' : 'Business Address'}
             value={formData.address}
             onChange={handleChange}
             className="w-full border p-2 rounded border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -410,8 +526,11 @@ const Register = () => {
         </form>
 
         <p className="mt-4 text-sm text-center text-slate-500">
-          Note: Your account will remain in <strong>Pending Verification</strong> until an admin
-          reviews your documents.
+          {role === 'angel_donor' ? (
+            <>Angel donors can donate immediately. No verification required. Donations capped at GH₵5,000.</>
+          ) : (
+            <>Your account will remain in <strong>Pending Verification</strong> until an admin reviews your documents.</>
+          )}
         </p>
 
         <p className="mt-2 text-sm text-center text-slate-500">

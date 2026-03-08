@@ -30,6 +30,10 @@ else
   grep -q "^APP_DEBUG=false" "$BACKEND_DIR/.env" 2>/dev/null && echo "  ✓ APP_DEBUG=false" || echo "  ⚠ APP_DEBUG not false"
   grep -q "^DB_" "$BACKEND_DIR/.env" 2>/dev/null && echo "  ✓ DB_* configured" || { echo "  ❌ DB_* missing"; ERRORS=$((ERRORS + 1)); }
   grep -q "yourdomain" "$BACKEND_DIR/.env" 2>/dev/null && echo "  ⚠ Replace yourdomain.com with your actual domain" || echo "  ✓ Domain configured"
+  grep -qE "^(PAYSTACK_PUBLIC_KEY|PAYSTACK_SECRET_KEY)=.+" "$BACKEND_DIR/.env" 2>/dev/null && echo "  ✓ Paystack keys set" || echo "  ⚠ Paystack keys missing (required for payments)"
+  grep -qE "^SANCTUM_STATEFUL_DOMAINS=.+" "$BACKEND_DIR/.env" 2>/dev/null && echo "  ✓ SANCTUM_STATEFUL_DOMAINS set" || echo "  ⚠ SANCTUM_STATEFUL_DOMAINS: ensure frontend domain is listed for cookie auth"
+  (grep -qE "^QOREID_CLIENT_ID=.+" "$BACKEND_DIR/.env" 2>/dev/null && grep -qE "^QOREID_SECRET=.+" "$BACKEND_DIR/.env" 2>/dev/null) && echo "  ✓ QoreID configured (Ghana Card)" || \
+  (grep -qE "^QOREID_SECRET_KEY=.+" "$BACKEND_DIR/.env" 2>/dev/null && echo "  ✓ QoreID configured (legacy)" || echo "  ℹ QoreID optional (Ghana Card verification)")
 fi
 echo ""
 

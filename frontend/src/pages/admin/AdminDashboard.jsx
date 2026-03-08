@@ -1,7 +1,8 @@
 // ## Admin Dashboard View
 // ## Displays dashboard data from backend API with auto-refresh
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, Truck, MapPin } from 'lucide-react';
 import { formatGHC } from '../../utils/currency';
 import { ImpactGrowthChart } from '../../components/charts/ImpactGrowthChart';
 import { ResourceValueChart } from '../../components/charts/ResourceValueChart';
@@ -10,6 +11,7 @@ import { requestApi, donationApi, allocationApi, deliveryRouteApi, userApi } fro
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalDonations: 0,
     totalRecipients: 0,
@@ -136,7 +138,16 @@ const AdminDashboard = () => {
   // ## Logistics Scheduler Widget
   const LogisticsScheduler = () => (
     <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm h-full">
-      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">Logistics Scheduler</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Logistics Scheduler</h3>
+        <button
+          onClick={() => navigate('/dashboard/delivery-dashboard')}
+          className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
+        >
+          <MapPin size={14} />
+          View Map
+        </button>
+      </div>
       <div className="space-y-3">
         {scheduledDeliveries.map((delivery, idx) => (
           <div key={idx} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
@@ -244,11 +255,14 @@ const AdminDashboard = () => {
           value={stats.totalRecipients.toLocaleString()}
           subtitle="Verified recipients this month"
         />
-        <KPIWidget
-          title="In-Transit"
-          value={stats.activeDeliveries}
-          subtitle="Active deliveries"
-        />
+        <button
+          onClick={() => navigate('/dashboard/delivery-dashboard')}
+          className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-blue-200 transition h-full w-full text-left"
+        >
+          <p className="text-xs font-medium text-slate-600 mb-1 uppercase tracking-wider">In-Transit</p>
+          <p className="text-2xl font-bold text-slate-900">{stats.activeDeliveries}</p>
+          <p className="text-xs text-slate-500 mt-1">Active deliveries · View map</p>
+        </button>
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">Pending Verifications</h3>
           <div className="space-y-3">
@@ -256,7 +270,10 @@ const AdminDashboard = () => {
               <p className="text-2xl font-bold text-slate-900 mb-2">{stats.pendingUsers}</p>
               <p className="text-xs text-slate-500">Users awaiting approval</p>
             </div>
-            <button className="w-full py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold text-blue-700 transition">
+            <button
+              onClick={() => navigate('/dashboard/verify-users')}
+              className="w-full py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-bold text-blue-700 transition"
+            >
               Review Now
             </button>
           </div>
@@ -275,9 +292,18 @@ const AdminDashboard = () => {
 
       {/* ## Third Row - Heat Map (Full Width) */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-        <div className="mb-4">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-2">Regional Request Heat Map</h3>
-          <p className="text-xs text-slate-500">Click on a region to view requests</p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-2">Regional Request Heat Map</h3>
+            <p className="text-xs text-slate-500">Click on a region to view requests</p>
+          </div>
+          <button
+            onClick={() => navigate('/dashboard/delivery-dashboard')}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-sm font-medium text-blue-700 transition"
+          >
+            <Truck size={18} />
+            Delivery Dashboard & Map
+          </button>
         </div>
         <div className="h-[600px] min-h-[600px]">
           <GhanaSVGHeatMap updateInterval={30000} />

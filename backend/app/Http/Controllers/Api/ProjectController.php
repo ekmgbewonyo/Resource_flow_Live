@@ -3,161 +3,161 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreProjectRequest;
+use App\Models\Organization;
 use App\Models\Project;
+use App\Models\ProjectBudget;
 use App\Models\ProjectItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class ProjectController extends Controller
 {
-    /**
-     * Get all projects (filtered by role)
-     */
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $query = Project::with(['ngo', 'verifier']);
+        $query = Project::with(['ngo', 'organization', 'verifier', 'projectBudgets']);
 
-        // NGOs see only their projects
         if ($user->isNGO()) {
-            $query->where('ngo_id', $user->id);
+            $query->where(function ($q) use ($user) {
+                $q->where('ngo_id', $user->id);
+                if ($user->organization) {
+                    $q->orWhere('organization_id', $user->organization->id);
+                }
+                $q->orWhere(function ($q2) {
+                    $q2->where('is_verified', true)->whereIn('status', ['active', 'fully_funded']);
+                });
+            });
         }
 
-        // Corporates see verified projects
-        if ($user->isCorporate()) {
-            $query->where('is_verified', true)
-                  ->where('status', 'active');
-        }
-
-        // Apply filters
-        if ($request->has('status')) {
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        if ($request->has('sdg_goals')) {
+        if ($request->filled('sdg_goals')) {
             $sdgGoals = is_array($request->sdg_goals) ? $request->sdg_goals : [$request->sdg_goals];
             $query->whereJsonContains('sdg_goals', $sdgGoals);
         }
 
-        $projects = $query->paginate($request->input('per_page', 15));
-
+        $projects = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 15));
         return response()->json($projects);
     }
 
-    /**
-     * Create a new project (NGO only)
-     */
-    public function store(Request $request): JsonResponse
+    public function store(StoreProjectRequest $request): JsonResponse
     {
         $user = Auth::user();
+        $validated = $request->validated();
 
-        if (!$user->isNGO()) {
-            return response()->json([
-                'message' => 'Only NGOs can create projects',
-            ], 403);
+        $org = $user->organization;
+        $targetAmount = 0;
+        foreach ($validated['budgets'] as $b) {
+            $targetAmount += (float) ($b['quantity'] ?? 0) * (float) ($b['unit_cost'] ?? 0);
         }
 
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'need_type' => 'required|in:funding,items,both',
-            'sdg_goals' => 'required|array',
-            'sdg_goals.*' => 'integer|min:1|max:17',
-            'budget' => 'nullable|numeric|min:0',
-            'location' => 'nullable|string|max:255',
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after:start_date',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
+        $slug = Str::slug($validated['title']) . '-' . substr(uniqid(), -6);
 
         $project = Project::create([
             'ngo_id' => $user->id,
-            'title' => $request->title,
-            'description' => $request->description,
-            'need_type' => $request->need_type,
-            'sdg_goals' => $request->sdg_goals,
-            'budget' => $request->budget,
-            'location' => $request->location,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-            'status' => 'active',
+            'organization_id' => $org?->id,
+            'title' => $validated['title'],
+            'slug' => $slug,
+            'description' => $validated['description'],
+            'need_type' => $validated['need_type'] ?? 'funding',
+            'sdg_goals' => $validated['sdg_goals'] ?? [],
+            'budget' => $targetAmount,
+            'target_amount' => $targetAmount,
+            'location' => $validated['location'] ?? null,
+            'location_gps' => $validated['location_gps'] ?? null,
+            'cover_photo_path' => $validated['cover_photo_path'] ?? null,
+            'proof_documents' => $validated['proof_documents'] ?? null,
+            'start_date' => $validated['start_date'] ?? null,
+            'end_date' => $validated['end_date'] ?? null,
+            'status' => 'draft',
         ]);
 
-        // Create project items if provided
-        if ($request->has('items') && is_array($request->items)) {
-            foreach ($request->items as $item) {
-                ProjectItem::create([
-                    'project_id' => $project->id,
-                    'item_name' => $item['item_name'],
-                    'description' => $item['description'] ?? null,
-                    'quantity_needed' => $item['quantity_needed'],
-                    'unit' => $item['unit'] ?? 'pieces',
-                    'estimated_value' => $item['estimated_value'] ?? null,
-                ]);
-            }
+        foreach ($validated['budgets'] as $b) {
+            ProjectBudget::create([
+                'project_id' => $project->id,
+                'category' => $b['category'],
+                'item_name' => $b['item_name'],
+                'quantity' => $b['quantity'],
+                'unit_cost' => $b['unit_cost'],
+                'total_cost' => (float) $b['quantity'] * (float) $b['unit_cost'],
+            ]);
         }
 
         return response()->json([
             'message' => 'Project created successfully',
-            'project' => $project->load(['ngo', 'projectItems']),
+            'project' => $project->load(['ngo', 'organization', 'projectBudgets']),
         ], 201);
     }
 
-    /**
-     * Get a specific project
-     */
     public function show($id): JsonResponse
     {
-        $project = Project::with(['ngo', 'verifier', 'projectItems', 'csrPartnerships.corporate'])
+        $project = Project::with(['ngo', 'organization', 'verifier', 'projectBudgets', 'projectItems', 'csrPartnerships.corporate'])
             ->findOrFail($id);
-
         return response()->json($project);
     }
 
-    /**
-     * Update a project (NGO only, their own projects)
-     */
     public function update(Request $request, $id): JsonResponse
     {
         $user = Auth::user();
         $project = Project::findOrFail($id);
 
-        if (!$user->isNGO() || $project->ngo_id !== $user->id) {
-            return response()->json([
-                'message' => 'Unauthorized',
-            ], 403);
+        if (!$user->canCreateProjects() || ($project->ngo_id !== $user->id && $project->organization_id !== $user->organization?->id)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
-            'status' => 'sometimes|in:active,completed,paused,cancelled',
+            'status' => 'sometimes|in:draft,pending_approval,active,fully_funded,completed,paused,cancelled',
             'budget' => 'sometimes|numeric|min:0',
+            'cover_photo_path' => 'nullable|string|max:500',
+            'proof_documents' => 'nullable|array',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $project->update($request->only([
-            'title', 'description', 'status', 'budget', 'location',
-            'start_date', 'end_date',
+        $project->update(array_merge($validated, [
+            'proof_documents' => $validated['proof_documents'] ?? $project->proof_documents,
         ]));
 
         return response()->json([
             'message' => 'Project updated successfully',
-            'project' => $project->fresh(['ngo', 'projectItems']),
+            'project' => $project->fresh(['ngo', 'organization', 'projectBudgets', 'projectItems']),
+        ]);
+    }
+
+    /**
+     * Submit project for approval (draft -> pending_approval)
+     */
+    public function submit(Request $request, Project $project): JsonResponse
+    {
+        $user = Auth::user();
+        $project->load('projectBudgets');
+
+        if (!$user->canCreateProjects() || $project->ngo_id !== $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($project->status !== 'draft') {
+            return response()->json(['message' => 'Only draft projects can be submitted.'], 422);
+        }
+
+        $targetAmount = $project->projectBudgets->sum('total_cost');
+        $org = $user->organization;
+
+        if ($targetAmount > 5000 && (!$org || !$org->canPublishLargeProject($targetAmount))) {
+            return response()->json([
+                'message' => 'Projects over GH₵5,000 require Tier 2 or Tier 3 verification.',
+            ], 422);
+        }
+
+        $project->update(['status' => 'pending_approval']);
+        return response()->json([
+            'message' => 'Project submitted for approval',
+            'project' => $project->fresh(['ngo', 'projectBudgets']),
         ]);
     }
 }

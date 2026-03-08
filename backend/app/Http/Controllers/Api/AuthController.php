@@ -165,20 +165,25 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:requestor,donor,supplier,ngo,corporate',
+            'role' => 'required|in:requestor,ngo,donor_institution,donor_individual,angel_donor',
             'organization' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:20',
         ]);
+
+        $role = $request->role;
+        $isAngelDonor = $role === 'angel_donor';
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'password_changed_at' => now(),
-            'role' => $request->role,
+            'role' => $role,
             'organization' => $request->organization,
             'phone' => $request->phone,
             'is_active' => true,
+            'is_verified' => $isAngelDonor, // Angel donors: no ID verification required
+            'verified_at' => $isAngelDonor ? now() : null,
         ]);
 
         $token = $user->createToken('auth-token')->plainTextToken;

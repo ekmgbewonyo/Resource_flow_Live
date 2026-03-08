@@ -68,4 +68,13 @@
   .card-hover {
     @apply card hover:shadow-md transition-shadow duration-200;
   }
+
+  /* Route map animated truck icon - no default marker styling */
+  .route-map-truck-icon {
+    background: transparent !important;
+    border: none !important;
+  }
+  .route-map-truck-icon img {
+    display: none;
+  }
 }

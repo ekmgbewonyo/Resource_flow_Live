@@ -21,10 +21,10 @@ class CSRPartnershipController extends Controller
         $user = Auth::user();
         $query = CSRPartnership::with(['corporate', 'ngo', 'project']);
 
-        if ($user->isCorporate()) {
-            $query->where('corporate_id', $user->id);
-        } elseif ($user->isNGO()) {
-            $query->where('ngo_id', $user->id);
+        if ($user->isDonorInstitution()) {
+            $query->where(function ($q) use ($user) {
+                $q->where('corporate_id', $user->id)->orWhere('ngo_id', $user->id);
+            });
         }
 
         if ($request->has('status')) {
@@ -43,9 +43,9 @@ class CSRPartnershipController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->isCorporate()) {
+        if (!$user->isDonorInstitution()) {
             return response()->json([
-                'message' => 'Only corporate users can create partnerships',
+                'message' => 'Only donor institutions can create partnerships',
             ], 403);
         }
 
@@ -125,10 +125,10 @@ class CSRPartnershipController extends Controller
             ->findOrFail($id);
 
         $user = Auth::user();
-        if ($user->isCorporate() && $partnership->corporate_id !== $user->id) {
+        if ($user->isDonorInstitution() && $partnership->corporate_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-        if ($user->isNGO() && $partnership->ngo_id !== $user->id) {
+        if ($user->isDonorInstitution() && $partnership->ngo_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -143,7 +143,7 @@ class CSRPartnershipController extends Controller
         $user = Auth::user();
         $partnership = CSRPartnership::findOrFail($id);
 
-        if ($user->isNGO() && $partnership->ngo_id === $user->id) {
+        if ($user->isDonorInstitution() && $partnership->ngo_id === $user->id) {
             // NGO can approve/reject
             $validator = Validator::make($request->all(), [
                 'status' => 'required|in:active,rejected',

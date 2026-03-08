@@ -34,6 +34,9 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'donor_type',
+        'assessable_annual_income',
+        'kyc_details_submitted',
         'organization',
         'address',
         'phone',
@@ -66,6 +69,8 @@ class User extends Authenticatable
         'reputation_score' => 'integer',
         'verified_by' => 'integer',
         'permissions' => 'array',
+        'assessable_annual_income' => 'decimal:2',
+        'kyc_details_submitted' => 'boolean',
     ];
 
     /** Password expires after 30 days. */
@@ -131,14 +136,40 @@ class User extends Authenticatable
         return $this->role === 'requestor';
     }
 
-    public function isDonor(): bool
+    /** NGO: receives assistance from Donor/Institutions, creates projects, uploads fundable projects */
+    public function isNGO(): bool
     {
-        return $this->role === 'donor';
+        return $this->role === 'ngo';
     }
 
+    /** Donor/Institution: Corporate donors who fund NGOs */
+    public function isDonorInstitution(): bool
+    {
+        return $this->role === 'donor_institution';
+    }
+
+    /** Donor/Individual: individual donors */
+    public function isDonorIndividual(): bool
+    {
+        return $this->role === 'donor_individual';
+    }
+
+    /** Angel Donor: no ID verification, donations capped at GHS 5000 */
+    public function isAngelDonor(): bool
+    {
+        return $this->role === 'angel_donor';
+    }
+
+    /** Any donor type (institution, individual, or angel) - can donate */
+    public function isDonor(): bool
+    {
+        return $this->isDonorInstitution() || $this->isDonorIndividual() || $this->isAngelDonor();
+    }
+
+    /** Can donate/claim - all donor types */
     public function isSupplier(): bool
     {
-        return $this->role === 'supplier';
+        return $this->isDonorInstitution() || $this->isDonorIndividual() || $this->isAngelDonor();
     }
 
     public function isAuditor(): bool
@@ -146,14 +177,10 @@ class User extends Authenticatable
         return $this->role === 'auditor';
     }
 
-    public function isNGO(): bool
-    {
-        return $this->role === 'ngo';
-    }
-
+    /** Corporate donor (Donor/Institution) */
     public function isCorporate(): bool
     {
-        return $this->role === 'corporate';
+        return $this->role === 'donor_institution';
     }
 
     public function isFieldAgent(): bool
@@ -197,13 +224,24 @@ class User extends Authenticatable
         if ($this->role === 'special' && $this->custom_role_name) {
             return $this->custom_role_name;
         }
-        return ucfirst(str_replace('_', ' ', $this->role ?? ''));
+        $labels = [
+            'ngo' => 'NGO',
+            'donor_institution' => 'Donor (Institution)',
+            'donor_individual' => 'Donor (Individual)',
+            'angel_donor' => 'Angel Donor',
+        ];
+        return $labels[$this->role ?? ''] ?? ucfirst(str_replace('_', ' ', $this->role ?? ''));
     }
 
-    // New relationships for CSR Matchmaking
+    // New relationships for CSR Matchmaking (NGO creates projects, donor_institution funds them)
     public function projects()
     {
         return $this->hasMany(Project::class, 'ngo_id');
+    }
+
+    public function organization()
+    {
+        return $this->hasOne(Organization::class);
     }
 
     public function csrPartnershipsAsCorporate()
@@ -219,6 +257,12 @@ class User extends Authenticatable
     public function supplierInventory()
     {
         return $this->hasMany(SupplierInventory::class, 'supplier_id');
+    }
+
+    /** Can this user create projects / CSR partnerships? (NGO only) */
+    public function canCreateProjects(): bool
+    {
+        return $this->isNGO();
     }
 
     public function impactProofs()

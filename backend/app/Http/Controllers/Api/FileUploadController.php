@@ -26,6 +26,8 @@ class FileUploadController extends Controller
                 'verification_document' => 5120,  // 5MB - Ghana Card, Business Reg
                 'request_document' => 10240,       // 10MB - Supporting documents
                 'donation_document' => 10240,     // 10MB - Donation receipts
+                'delivery_proof' => 5120,        // 5MB - Ghana Card, recipient photo, signature
+                'project' => 5120,               // 5MB - Project cover, proof docs
                 'other' => 10240,                 // 10MB - Default
             ];
             
@@ -36,6 +38,8 @@ class FileUploadController extends Controller
                 'verification_document' => 'jpg,jpeg,png,pdf', // Images and PDFs for verification
                 'request_document' => 'jpg,jpeg,png,pdf,doc,docx', // All document types
                 'donation_document' => 'jpg,jpeg,png,pdf', // Receipts and invoices
+                'delivery_proof' => 'jpg,jpeg,png', // Ghana Card, recipient photo, signature
+                'project' => 'jpg,jpeg,png,pdf',   // Project cover, proof docs
                 'other' => 'jpg,jpeg,png,pdf,doc,docx',
             ];
             
@@ -44,7 +48,7 @@ class FileUploadController extends Controller
             // Validate file and type with type-specific limits
             $validated = $request->validate([
                 'file' => "required|file|max:{$maxSize}|mimes:{$allowedMimes}",
-                'type' => 'required|in:request_document,verification_document,donation_document,other',
+                'type' => 'required|in:request_document,verification_document,donation_document,delivery_proof,project,other',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -93,6 +97,8 @@ class FileUploadController extends Controller
                 'request_document' => 'requests',
                 'verification_document' => 'verifications',
                 'donation_document' => 'donations',
+                'delivery_proof' => 'delivery_proofs',
+                'project' => 'projects',
                 default => 'uploads',
             };
             
@@ -146,7 +152,7 @@ class FileUploadController extends Controller
         $validated = $request->validate([
             'files' => 'required|array|min:1|max:5',
             'files.*' => 'required|file|max:10240', // 10MB max per file
-            'type' => 'required|in:request_document,verification_document,donation_document,other',
+            'type' => 'required|in:request_document,verification_document,donation_document,delivery_proof,other',
         ]);
 
         $uploadedFiles = [];
@@ -161,6 +167,8 @@ class FileUploadController extends Controller
                     'request_document' => 'requests',
                     'verification_document' => 'verifications',
                     'donation_document' => 'donations',
+                    'delivery_proof' => 'delivery_proofs',
+                    'project' => 'projects',
                     default => 'uploads',
                 };
                 

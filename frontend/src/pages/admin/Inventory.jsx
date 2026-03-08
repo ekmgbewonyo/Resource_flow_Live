@@ -1,48 +1,105 @@
 // ## Inventory Management Component
-// ## Displays granular inventory table with traceability and pricing information
-import React, { useState, useMemo } from 'react';
-import { Package, Search, MapPin, User, Calendar, AlertTriangle, TrendingUp, CheckCircle, Clock, Lock, Coins } from 'lucide-react';
+// ## Admin confirms receipt before items appear in inventory. Auditor then authorizes prices.
+import React, { useState, useMemo, useEffect } from 'react';
+import { Package, Search, MapPin, User, AlertTriangle, CheckCircle, Clock, Lock, Coins, Loader2, Truck } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
-import { StatusBadge } from '../../components/shared/StatusBadge';
+import { Button } from '../../components/ui/Button';
 import { formatGHC } from '../../utils/currency';
-import { WarehouseModel } from '../../models/WarehouseModel';
+import { donationApi } from '../../services/api';
+
+// Map donation to display format
+const mapDonationToItem = (d) => ({
+  id: d.id,
+  itemName: d.item || '—',
+  specification: d.description || d.unit || '—',
+  category: d.type || 'Goods',
+  brand: '—',
+  batchNumber: null,
+  quantity: d.quantity || 0,
+  unit: d.unit || 'units',
+  colocation: {
+    facility: d.warehouse?.name || d.colocation_facility || '—',
+    subLocation: d.colocation_sub_location || '—',
+  },
+  donorInfo: {
+    name: d.user?.name || '—',
+    supplierId: d.user_id ? `user-${d.user_id}` : '—',
+  },
+  status: d.status === 'Verified' ? 'Available' : d.status === 'Allocated' ? 'Reserved' : d.status === 'Delivered' ? 'Disbursed' : 'Unavailable',
+  expiryDate: d.expiry_date,
+  priceStatus: d.price_status || 'Estimated',
+  marketPrice: d.market_price,
+  auditedPrice: d.audited_price,
+  value: d.audited_price || d.value,
+});
 
 const Inventory = () => {
-  // ## Inventory items state - get from Model
-  const [inventory, setInventory] = useState(WarehouseModel.getAllInventory());
-  // ## Search query state for filtering
+  const [donations, setDonations] = useState([]);
+  const [pendingReceipt, setPendingReceipt] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [confirmingId, setConfirmingId] = useState(null);
 
-  // ## Calculate stock health metrics
-  // ## Only uses locked prices for financial reporting accuracy
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [confirmed, pending] = await Promise.all([
+        donationApi.getAll({ receipt_confirmed: true }),
+        donationApi.getAll({ receipt_confirmed: false }),
+      ]);
+      const goods = (d) => d.type === 'Goods';
+      setDonations(Array.isArray(confirmed) ? confirmed.filter(goods) : []);
+      setPendingReceipt(Array.isArray(pending) ? pending.filter(goods) : []);
+    } catch (err) {
+      console.error('Error fetching inventory:', err);
+      setError('Failed to load inventory.');
+      setDonations([]);
+      setPendingReceipt([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleConfirmReceipt = async (donationId) => {
+    try {
+      setConfirmingId(donationId);
+      await donationApi.confirmReceipt(donationId);
+      await fetchData();
+    } catch (err) {
+      console.error('Error confirming receipt:', err);
+      alert(err?.response?.data?.message || 'Failed to confirm receipt.');
+    } finally {
+      setConfirmingId(null);
+    }
+  };
+
+  const inventory = useMemo(() => donations.map(mapDonationToItem), [donations]);
+
   const stockHealth = useMemo(() => {
     const totalItems = inventory.length;
-    // ## Sum only locked prices for financial reporting
     const totalValue = inventory.reduce((sum, item) => {
       if (item.priceStatus === 'Locked' && item.value) {
-        return sum + (item.value * item.quantity);
+        return sum + item.value * item.quantity;
       }
       return sum;
     }, 0);
-    // ## Count items by status
-    const availableItems = inventory.filter(item => item.status === 'Available').length;
-    const reservedItems = inventory.filter(item => item.status === 'Reserved').length;
-    const disbursedItems = inventory.filter(item => item.status === 'Disbursed').length;
-    const unavailableItems = inventory.filter(item => item.status === 'Unavailable').length;
-    
-    // ## Low stock alert: items with quantity less than 50 (only available items)
-    const lowStockAlerts = inventory.filter(item => item.quantity < 50 && item.status === 'Available').length;
-    
-    // ## Near expiry items: items expiring within 90 days (only available items)
+    const availableItems = inventory.filter((i) => i.status === 'Available').length;
+    const reservedItems = inventory.filter((i) => i.status === 'Reserved').length;
+    const disbursedItems = inventory.filter((i) => i.status === 'Disbursed').length;
     const today = new Date();
-    const nearExpiryItems = inventory.filter(item => {
-      if (!item.expiryDate) return false;
-      const expiry = new Date(item.expiryDate);
-      // ## Calculate days until expiry
-      const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      return daysUntilExpiry <= 90 && daysUntilExpiry > 0 && item.status === 'Available';
+    const lowStockAlerts = inventory.filter((i) => i.quantity < 50 && i.status === 'Available').length;
+    const nearExpiryItems = inventory.filter((i) => {
+      if (!i.expiryDate) return false;
+      const expiry = new Date(i.expiryDate);
+      const days = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      return days <= 90 && days > 0 && i.status === 'Available';
     }).length;
-
     return {
       totalItems,
       totalValue,
@@ -54,24 +111,45 @@ const Inventory = () => {
     };
   }, [inventory]);
 
-  // ## Filter inventory items based on search query
   const filteredInventory = useMemo(() => {
-    // ## Return all items if search is empty
     if (!searchQuery.trim()) return inventory;
-    
-    // ## Search across multiple fields
-    const query = searchQuery.toLowerCase();
-    return inventory.filter(item => 
-      item.itemName.toLowerCase().includes(query) ||
-      item.brand.toLowerCase().includes(query) ||
-      item.batchNumber?.toLowerCase().includes(query) ||
-      item.colocation.facility.toLowerCase().includes(query) ||
-      item.colocation.subLocation.toLowerCase().includes(query) ||
-      item.donorInfo.name.toLowerCase().includes(query)
+    const q = searchQuery.toLowerCase();
+    return inventory.filter(
+      (i) =>
+        i.itemName.toLowerCase().includes(q) ||
+        (i.colocation?.facility || '').toLowerCase().includes(q) ||
+        (i.colocation?.subLocation || '').toLowerCase().includes(q) ||
+        (i.donorInfo?.name || '').toLowerCase().includes(q)
     );
   }, [inventory, searchQuery]);
 
-  // ## Calculate days until expiry date
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 mx-auto text-blue-500 animate-spin mb-4" />
+          <p className="text-slate-600">Loading inventory...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p className="text-red-700 font-medium">{error}</p>
+          <button
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const getDaysUntilExpiry = (expiryDate) => {
     if (!expiryDate) return null;
     const today = new Date();
@@ -145,8 +223,55 @@ const Inventory = () => {
       {/* Header */}
       <div>
         <h2 className="text-xl font-bold text-slate-800">Inventory Management</h2>
-        <p className="text-slate-500 mt-1">Track physical donations from verification to disbursement</p>
+        <p className="text-slate-500 mt-1">Confirm receipt of donated goods before they appear in inventory. Auditor then authorizes prices.</p>
       </div>
+
+      {/* Pending Receipt - Admin must confirm before item is added to inventory */}
+      {pendingReceipt.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-amber-200 bg-amber-100/50">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <Truck size={18} />
+              Pending Receipt Confirmation ({pendingReceipt.length})
+            </h3>
+            <p className="text-sm text-slate-600 mt-1">Confirm physical receipt to add these items to inventory for Auditor price review.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-amber-100/50 border-b border-amber-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Item</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Donor</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Qty</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-200">
+                {pendingReceipt.map((d) => (
+                  <tr key={d.id} className="hover:bg-amber-50/50">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900">{d.item}</div>
+                      <div className="text-sm text-slate-500">{d.description || d.unit}</div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-700">{d.user?.name || '—'}</td>
+                    <td className="px-6 py-4 text-sm font-medium">{d.quantity} {d.unit}</td>
+                    <td className="px-6 py-4">
+                      <Button
+                        size="sm"
+                        icon={CheckCircle}
+                        onClick={() => handleConfirmReceipt(d.id)}
+                        disabled={confirmingId === d.id}
+                      >
+                        {confirmingId === d.id ? 'Confirming...' : 'Confirm Receipt'}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Stock Health Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -273,8 +398,8 @@ const Inventory = () => {
                         <div className="flex items-start gap-2">
                           <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
                           <div>
-                            <div className="text-sm font-medium text-slate-900">{item.colocation.facility}</div>
-                            <div className="text-xs text-slate-500">{item.colocation.subLocation}</div>
+                            <div className="text-sm font-medium text-slate-900">{item.colocation?.facility || '—'}</div>
+                            <div className="text-xs text-slate-500">{item.colocation?.subLocation || '—'}</div>
                           </div>
                         </div>
                       </td>
@@ -316,17 +441,17 @@ const Inventory = () => {
                               Market: {formatGHC(item.marketPrice)}
                             </div>
                           )}
-                          {item.priceStatus === 'Locked' && item.auditedPrice && (
+                          {(item.priceStatus === 'Locked' && (item.auditedPrice || item.value)) && (
                             <div className="text-sm font-bold text-emerald-600">
-                              Audited: {formatGHC(item.auditedPrice)}
+                              Audited: {formatGHC(item.auditedPrice || item.value)}
                             </div>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-slate-900">
-                          {item.priceStatus === 'Locked' && item.value
-                            ? formatGHC(item.value * item.quantity)
+                          {item.priceStatus === 'Locked' && (item.value || item.auditedPrice)
+                            ? formatGHC((item.value || item.auditedPrice) * item.quantity)
                             : item.marketPrice
                             ? formatGHC(item.marketPrice * item.quantity)
                             : 'N/A'}

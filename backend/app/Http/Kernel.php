@@ -15,6 +15,7 @@ class Kernel extends HttpKernel
         // \App\Http\Middleware\TrustHosts::class,
         \App\Http\Middleware\TrustProxies::class,
         \App\Http\Middleware\AddCorsHeaders::class,
+        \App\Http\Middleware\SecurityHeaders::class,
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
@@ -68,6 +69,7 @@ class Kernel extends HttpKernel
         'verified.user' => \App\Http\Middleware\VerifyUserVerified::class,
         'not.blocked' => \App\Http\Middleware\CheckUserNotBlocked::class,
         'password.expired' => \App\Http\Middleware\CheckPasswordExpired::class,
+        'org.tier' => \App\Http\Middleware\EnsureOrganizationTier::class,
     ];
 }
 

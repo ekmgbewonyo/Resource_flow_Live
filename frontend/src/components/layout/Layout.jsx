@@ -69,16 +69,39 @@ const Layout = () => {
       { name: 'Logistics', icon: Map, path: '/dashboard/logistics' },
       { name: 'Delivery Dashboard', icon: Truck, path: '/dashboard/delivery-dashboard' },
       { name: 'Impact Dashboard', icon: TrendingUp, path: '/dashboard/impact' },
-      { name: 'Transparency Log', icon: History, path: '/dashboard/transparency-log' },
+      { name: 'Audit Logs', icon: History, path: '/dashboard/transparency-log' },
       { name: 'User Management', icon: Users, path: '/dashboard/user-management' },
       { name: 'Reporting', icon: FileBarChart, path: '/dashboard/reports' },
     ],
-    supplier: [
+    ngo: [
+      { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'Organization', icon: ShieldCheck, path: '/dashboard/organization' },
+      { name: 'Post Update', icon: FileText, path: '/dashboard/upload-proof' },
+      { name: 'Documents', icon: ShieldCheck, path: '/dashboard/documents' },
+    ],
+    donor_institution: [
       { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       { name: 'Donate', icon: Package, path: '/dashboard/donate', requiresVerification: true },
       { name: 'Available Requests', icon: TrendingUp, path: '/dashboard/available-requests' },
       { name: 'Fund Projects', icon: Heart, path: '/dashboard/projects' },
+      { name: 'Find NGOs', icon: TrendingUp, path: '/dashboard/matchmaking' },
+      { name: 'Impact Dashboard', icon: TrendingUp, path: '/dashboard/impact' },
+      { name: 'My Partnerships', icon: Heart, path: '/dashboard/partnerships' },
       { name: 'Documents', icon: ShieldCheck, path: '/dashboard/documents' },
+    ],
+    donor_individual: [
+      { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'Donate', icon: Package, path: '/dashboard/donate', requiresVerification: true },
+      { name: 'Available Requests', icon: TrendingUp, path: '/dashboard/available-requests' },
+      { name: 'Find NGOs', icon: TrendingUp, path: '/dashboard/matchmaking' },
+      { name: 'Documents', icon: ShieldCheck, path: '/dashboard/documents' },
+    ],
+    angel_donor: [
+      { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'Donate', icon: Package, path: '/dashboard/donate' },
+      { name: 'Available Requests', icon: TrendingUp, path: '/dashboard/available-requests' },
+      { name: 'Find NGOs', icon: TrendingUp, path: '/dashboard/matchmaking' },
+      { name: 'Impact Dashboard', icon: TrendingUp, path: '/dashboard/impact' },
     ],
     recipient: [
       { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -91,21 +114,6 @@ const Layout = () => {
       { name: 'Monetary Transfers', icon: DollarSign, path: '/dashboard/transfers' },
       { name: 'Audit Logs', icon: FileBarChart, path: '/dashboard/audit-logs' },
     ],
-    ngo: [
-      { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      { name: 'Create Request', icon: Package, path: '/dashboard/request', requiresVerification: true },
-      { name: 'My Projects', icon: Package, path: '/dashboard/projects' },
-      { name: 'Partnerships', icon: Heart, path: '/dashboard/partnerships' },
-      { name: 'Documents', icon: ShieldCheck, path: '/dashboard/documents' },
-    ],
-    corporate: [
-      { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-      { name: 'Available Requests', icon: TrendingUp, path: '/dashboard/available-requests' },
-      { name: 'Find NGOs', icon: TrendingUp, path: '/dashboard/matchmaking' },
-      { name: 'Impact Dashboard', icon: TrendingUp, path: '/dashboard/impact' },
-      { name: 'My Partnerships', icon: Heart, path: '/dashboard/partnerships' },
-      { name: 'Projects', icon: Package, path: '/dashboard/projects' },
-    ],
     field_agent: [
       { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
       { name: 'Upload Proof', icon: FileText, path: '/dashboard/upload-proof' },
@@ -113,11 +121,13 @@ const Layout = () => {
     ],
     driver: [
       { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'My Trips', icon: Truck, path: '/dashboard/trips' },
       { name: 'Logistics', icon: Map, path: '/dashboard/logistics' },
       { name: 'Delivery Dashboard', icon: Truck, path: '/dashboard/delivery-dashboard' },
     ],
     supervisor: [
       { name: 'My Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'My Trips', icon: Truck, path: '/dashboard/trips' },
       { name: 'Logistics', icon: Map, path: '/dashboard/logistics' },
       { name: 'Delivery Dashboard', icon: Truck, path: '/dashboard/delivery-dashboard' },
       { name: 'Team', icon: Users, path: '/dashboard/team' },
@@ -152,13 +162,37 @@ const Layout = () => {
       text: 'text-white',
       logoBg: 'bg-blue-500/80 backdrop-blur-sm',
     },
-    supplier: {
-      bg: 'bg-emerald-800/80 backdrop-blur-md', // ## Translucent Success Green
+    ngo: {
+      bg: 'bg-emerald-800/80 backdrop-blur-md',
       hover: 'hover:bg-emerald-700/90',
       active: 'bg-emerald-700/90',
       border: 'border-emerald-700/50',
       text: 'text-white',
       logoBg: 'bg-emerald-500/80 backdrop-blur-sm',
+    },
+    donor_institution: {
+      bg: 'bg-teal-800/80 backdrop-blur-md',
+      hover: 'hover:bg-teal-700/90',
+      active: 'bg-teal-700/90',
+      border: 'border-teal-700/50',
+      text: 'text-white',
+      logoBg: 'bg-teal-500/80 backdrop-blur-sm',
+    },
+    donor_individual: {
+      bg: 'bg-cyan-800/80 backdrop-blur-md',
+      hover: 'hover:bg-cyan-700/90',
+      active: 'bg-cyan-700/90',
+      border: 'border-cyan-700/50',
+      text: 'text-white',
+      logoBg: 'bg-cyan-500/80 backdrop-blur-sm',
+    },
+    angel_donor: {
+      bg: 'bg-indigo-800/80 backdrop-blur-md',
+      hover: 'hover:bg-indigo-700/90',
+      active: 'bg-indigo-700/90',
+      border: 'border-indigo-700/50',
+      text: 'text-white',
+      logoBg: 'bg-indigo-500/80 backdrop-blur-sm',
     },
     recipient: {
       bg: 'bg-amber-400/80 backdrop-blur-md', // ## Translucent Warm Yellow
@@ -175,22 +209,6 @@ const Layout = () => {
       border: 'border-slate-600/50',
       text: 'text-slate-200',
       logoBg: 'bg-slate-500/80 backdrop-blur-sm',
-    },
-    ngo: {
-      bg: 'bg-teal-800/80 backdrop-blur-md',
-      hover: 'hover:bg-teal-700/90',
-      active: 'bg-teal-700/90',
-      border: 'border-teal-700/50',
-      text: 'text-white',
-      logoBg: 'bg-teal-500/80 backdrop-blur-sm',
-    },
-    corporate: {
-      bg: 'bg-indigo-800/80 backdrop-blur-md',
-      hover: 'hover:bg-indigo-700/90',
-      active: 'bg-indigo-700/90',
-      border: 'border-indigo-700/50',
-      text: 'text-white',
-      logoBg: 'bg-indigo-500/80 backdrop-blur-sm',
     },
     driver: {
       bg: 'bg-sky-800/80 backdrop-blur-md',
@@ -227,7 +245,7 @@ const Layout = () => {
         {/* Logo - fixed at top */}
         <div className="py-6 shrink-0">
           <h1 className="text-base font-bold tracking-tight flex items-center gap-2">
-            <div className={`w-8 h-8 ${currentStyle.logoBg} rounded-lg flex items-center justify-center ${role === 'recipient' ? 'text-slate-900' : 'text-white'} font-bold`}>
+            <div className={`w-8 h-8 ${currentStyle.logoBg} rounded-lg flex items-center justify-center ${['recipient'].includes(role) ? 'text-slate-900' : 'text-white'} font-bold`}>
               R
             </div>
             ResourceFlow

@@ -12,6 +12,9 @@ class Donation extends Model
 
     protected $fillable = [
         'user_id',
+        'donor_type',
+        'is_anonymous',
+        'compliance_agreed',
         'aid_request_id',
         'type',
         'item',
@@ -21,6 +24,8 @@ class Donation extends Model
         'description',
         'status',
         'date_received',
+        'receipt_confirmed_at',
+        'receipt_confirmed_by',
         'warehouse_id',
         'colocation_facility',
         'colocation_sub_location',
@@ -41,8 +46,11 @@ class Donation extends Model
         'market_price' => 'decimal:2',
         'audited_price' => 'decimal:2',
         'date_received' => 'date',
+        'receipt_confirmed_at' => 'datetime',
         'expiry_date' => 'date',
         'locked_at' => 'datetime',
+        'is_anonymous' => 'boolean',
+        'compliance_agreed' => 'boolean',
     ];
 
     public function user()
@@ -63,6 +71,11 @@ class Donation extends Model
     public function auditor()
     {
         return $this->belongsTo(User::class, 'audited_by');
+    }
+
+    public function receiptConfirmedBy()
+    {
+        return $this->belongsTo(User::class, 'receipt_confirmed_by');
     }
 
     public function allocations()

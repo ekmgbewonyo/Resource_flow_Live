@@ -1,8 +1,24 @@
-import React from 'react';
-import { Package, CheckCircle, Clock, Truck, MapPin } from 'lucide-react';
+import React, { useState } from 'react';
+import { Package, CheckCircle, Clock, Truck, MapPin, FileDown, Loader2 } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
+import { donationApi } from '../../services/api';
 
 export const DonationTracker = ({ donations }) => {
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  const canDownloadCertificate = (d) =>
+    ['Verified', 'Allocated', 'Delivered'].includes(d.status);
+
+  const handleDownloadCertificate = async (donationId) => {
+    setDownloadingId(donationId);
+    try {
+      await donationApi.downloadCertificate(donationId);
+    } catch (err) {
+      console.error('Certificate download failed:', err);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
   const getStatusIcon = (status) => {
     switch (status) {
       case 'Pending':
@@ -35,7 +51,24 @@ export const DonationTracker = ({ donations }) => {
                 </p>
               </div>
             </div>
-            <StatusBadge status={donation.status} />
+            <div className="flex items-center gap-2">
+              {canDownloadCertificate(donation) && (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadCertificate(donation.id)}
+                  disabled={downloadingId === donation.id}
+                  className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1 px-2 py-1 rounded hover:bg-emerald-50"
+                >
+                  {downloadingId === donation.id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <FileDown size={14} />
+                  )}
+                  Certificate
+                </button>
+              )}
+              <StatusBadge status={donation.status} />
+            </div>
           </div>
           
           {donation.allocatedTo && (
@@ -46,7 +79,7 @@ export const DonationTracker = ({ donations }) => {
           )}
           
           <div className="text-xs text-slate-400 mt-2">
-            Created: {new Date(donation.createdAt).toLocaleDateString()}
+            Created: {new Date(donation.created_at || donation.createdAt).toLocaleDateString()}
           </div>
         </div>
       ))}

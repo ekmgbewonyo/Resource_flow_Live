@@ -1,7 +1,7 @@
 // ## Create Donation View
 // ## Form for suppliers to submit donations
 import React, { useState } from 'react';
-import { ArrowLeft, Package, DollarSign, Save, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Package, Save, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui/Button';
@@ -17,6 +17,8 @@ const CreateDonation = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
 
+  const { role } = useAuth();
+
   // ## Form state
   const [formData, setFormData] = useState({
     type: 'Goods',
@@ -24,7 +26,17 @@ const CreateDonation = () => {
     quantity: '',
     unit: 'bags',
     description: '',
+    is_anonymous: false,
+    compliance_agreed: false,
   });
+
+  const isCorporate = role === 'donor_institution';
+  const isIndividual = role === 'donor_individual';
+  const isAngelDonor = role === 'angel_donor';
+  const ANGEL_DONOR_CAP = 5000;
+  const amount = formData.type === 'Monetary' ? parseFloat(formData.quantity || 0) : 0;
+  const canBeAnonymous = isIndividual && formData.type === 'Monetary' && amount > 0 && amount <= 10000;
+  const showAnonymousOption = isIndividual && formData.type === 'Monetary';
 
   // ## Handle input changes
   const handleChange = (e) => {
@@ -49,6 +61,12 @@ const CreateDonation = () => {
     if (!formData.quantity || parseFloat(formData.quantity) <= 0) {
       newErrors.quantity = 'Valid quantity is required';
     }
+    if (isAngelDonor && formData.type === 'Monetary') {
+      const amt = parseFloat(formData.quantity || 0);
+      if (formData.unit === 'GH₵' && amt > ANGEL_DONOR_CAP) {
+        newErrors.quantity = `Angel donors are capped at GH₵${ANGEL_DONOR_CAP.toLocaleString()} per donation.`;
+      }
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -68,6 +86,8 @@ const CreateDonation = () => {
         unit: formData.unit,
         description: formData.description || null,
         ...(targetRequest?.id && { aid_request_id: targetRequest.id }),
+        ...(isCorporate && { compliance_agreed: formData.compliance_agreed }),
+        ...(canBeAnonymous && { is_anonymous: formData.is_anonymous }),
       };
 
       console.log('Creating donation:', donationData);
@@ -151,7 +171,7 @@ const CreateDonation = () => {
         {/* ## Donation Details */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <DollarSign size={20} />
+            <span className="text-emerald-600 font-semibold">GH₵</span>
             Donation Details
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -207,6 +227,7 @@ const CreateDonation = () => {
               name="quantity"
               type="number"
               min="1"
+              max={isAngelDonor && formData.type === 'Monetary' && formData.unit === 'GH₵' ? ANGEL_DONOR_CAP : undefined}
               step={formData.type === 'Monetary' ? '0.01' : '1'}
               value={formData.quantity}
               onChange={handleChange}
@@ -219,8 +240,54 @@ const CreateDonation = () => {
                   : 'Enter quantity'
               }
             />
+            {isAngelDonor && (
+              <p className="text-sm text-amber-600 col-span-full">
+                Angel donor: donations are capped at GH₵5,000 per donation.
+              </p>
+            )}
           </div>
         </div>
+
+        {/* ## Donor Compliance - Individual: anonymous option; Corporate: tax compliance */}
+        {(showAnonymousOption || isCorporate) && (
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <ShieldCheck size={20} />
+              Compliance & Tax
+            </h3>
+            {showAnonymousOption && (
+              <label className={`flex items-center gap-2 mb-4 ${!canBeAnonymous ? 'opacity-60' : 'cursor-pointer'}`}>
+                <input
+                  type="checkbox"
+                  checked={formData.is_anonymous}
+                  disabled={!canBeAnonymous}
+                  onChange={(e) => setFormData((p) => ({ ...p, is_anonymous: e.target.checked }))}
+                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm text-slate-700">
+                  {canBeAnonymous
+                    ? 'Remain anonymous (donations ≤ GH₵10,000)'
+                    : amount > 10000
+                    ? 'Donations over GH₵10,000 require full details (not anonymous)'
+                    : 'Remain anonymous (enter amount ≤ GH₵10,000)'}
+                </span>
+              </label>
+            )}
+            {isCorporate && (
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.compliance_agreed}
+                  onChange={(e) => setFormData((p) => ({ ...p, compliance_agreed: e.target.checked }))}
+                  className="mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-sm text-slate-700">
+                  I agree that the expenditure is wholly, exclusively, and necessarily incurred in the production of income. (Required for tax-deductible donations)
+                </span>
+              </label>
+            )}
+          </div>
+        )}
 
         {/* ## Additional Information */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">

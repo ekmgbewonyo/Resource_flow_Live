@@ -17,19 +17,19 @@ const ValuationReview = () => {
   const [allInventory, setAllInventory] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // ## Fetch donations from API
+  // ## Fetch donations from API - only receipt-confirmed items (Admin has confirmed physical receipt)
   const fetchDonations = useCallback(async () => {
     try {
       setLoading(true);
-      const donations = await donationApi.getAll({ status: 'pending' });
-      // Transform donations to inventory format for compatibility
+      const donations = await donationApi.getAll({ receipt_confirmed: true });
+      // Transform donations to inventory format - market_price from web scraping must be authorized by Auditor
       const inventory = Array.isArray(donations) ? donations.map(d => ({
         id: d.id,
         itemName: d.item || 'Unknown Item',
-        brand: d.user?.organization || 'Unknown',
+        brand: d.user?.organization || d.user?.name || 'Unknown',
         quantity: d.quantity || 0,
         unit: d.unit || 'units',
-        marketPrice: d.estimated_value || 0,
+        marketPrice: d.market_price || d.value || d.estimated_value || 0,
         auditedPrice: d.audited_price || null,
         priceStatus: d.price_status || (d.audited_price ? 'Locked' : 'Pending Review'),
         value: d.audited_price || d.estimated_value || 0,
@@ -90,40 +90,55 @@ const ValuationReview = () => {
     }).length : 0,
   };
 
-  // ## Handle price override
-  const handleOverridePrice = (itemId) => {
+  // ## Handle price override - Lock with custom price
+  const handleOverridePrice = () => {
+    if (!selectedItem) return;
     const price = parseFloat(overridePrice);
     if (isNaN(price) || price <= 0) {
       alert('Please enter a valid price');
       return;
     }
-    // ## In production, this would call an API via Controller
-    console.log(`Overriding price for ${itemId} to ${price}`);
-    alert(`Price override submitted for ${itemId}. In production, this would update the database.`);
-    setSelectedItem(null);
-    setOverridePrice('');
+    handleLockPrice(selectedItem, price, 'Override by auditor');
   };
 
-  // ## Handle confirm price
-  const handleConfirmPrice = (itemId) => {
-    // ## In production, this would call an API via Controller
-    console.log(`Confirming market price for ${itemId}`);
-    alert(`Price confirmed for ${itemId}. In production, this would lock the price.`);
-  };
-
-  // ## Handle lock price
-  const handleLockPrice = async (itemId, auditedPrice, auditorNotes = '') => {
+  // ## Handle confirm price - Authorize web-scraped/market price
+  const handleConfirmPrice = async (item) => {
+    const price = item.marketPrice || item.value;
+    if (!price || price <= 0) {
+      alert('No market price to authorize. Use Override to enter a price.');
+      return;
+    }
     try {
-      const { donationApi } = await import('../../services/api');
-      await donationApi.lockPrice(itemId, {
-        audited_price: auditedPrice,
-        auditor_notes: auditorNotes,
+      await donationApi.lockPrice(item.id, {
+        audited_price: price,
+        auditor_notes: 'Authorized market/scraped price',
       });
-      alert(`Price locked successfully! Donation status updated to Verified.`);
-      // Reload data if needed
-      window.location.reload();
-    } catch (error) {
-      console.error('Error locking price:', error);
+      alert('Price authorized. Total inventory value updated.');
+      fetchDonations();
+    } catch (err) {
+      console.error('Error authorizing price:', err);
+      alert('Failed to authorize price. Please try again.');
+    }
+  };
+
+  // ## Handle lock price - with custom audited price (from Override modal)
+  const handleLockPrice = async (item, auditedPrice, auditorNotes = '') => {
+    const price = auditedPrice ?? item.marketPrice ?? item.value;
+    if (!price || price <= 0) {
+      alert('Please enter a valid price.');
+      return;
+    }
+    try {
+      await donationApi.lockPrice(item.id, {
+        audited_price: parseFloat(price),
+        auditor_notes: auditorNotes || undefined,
+      });
+      alert('Price locked. Total inventory value updated.');
+      setSelectedItem(null);
+      setOverridePrice('');
+      fetchDonations();
+    } catch (err) {
+      console.error('Error locking price:', err);
       alert('Failed to lock price. Please try again.');
     }
   };
@@ -133,7 +148,7 @@ const ValuationReview = () => {
       {/* ## Header */}
       <div>
         <h2 className="text-base font-bold text-slate-800">Valuation Review</h2>
-        <p className="text-slate-500 mt-1">Review and lock inventory item prices for financial reporting</p>
+        <p className="text-slate-500 mt-1">Authorize prices (including web-scraped market prices) for receipt-confirmed items. Total inventory value updates when prices are locked.</p>
       </div>
 
       {/* ## Valuation Statistics - 3x3 Grid */}
@@ -219,7 +234,7 @@ const ValuationReview = () => {
                   Brand & Batch
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Market Suggestion
+                  Market Price (to authorize)
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Audited Price
@@ -304,17 +319,22 @@ const ValuationReview = () => {
                               variant="primary"
                               size="sm"
                               icon={CheckCircle}
-                              onClick={() => handleConfirmPrice(item.id)}
+                              onClick={() => handleConfirmPrice(item)}
                               className="text-xs px-2 py-1"
+                              title="Authorize market/scraped price"
                             >
-                              Confirm
+                              Authorize
                             </Button>
                             <Button
                               variant="primary"
                               size="sm"
                               icon={Lock}
-                              onClick={() => handleLockPrice(item.id)}
+                              onClick={() => {
+                                setSelectedItem(item);
+                                setOverridePrice((item.auditedPrice || item.marketPrice || item.value || '').toString());
+                              }}
                               className="text-xs px-2 py-1 bg-slate-600 hover:bg-slate-700"
+                              title="Lock with custom price"
                             >
                               Lock
                             </Button>

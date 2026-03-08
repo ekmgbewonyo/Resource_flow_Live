@@ -13,12 +13,14 @@ use App\Http\Controllers\Api\VerificationDocumentController;
 use App\Http\Controllers\Api\FinancialController;
 use App\Http\Controllers\Api\AuditTrailController;
 use App\Http\Controllers\Api\DonationController;
+use App\Http\Controllers\Api\DonationCertificateController;
 use App\Http\Controllers\Api\ContributionController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\MatchmakingController;
 use App\Http\Controllers\Api\ImpactDashboardController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\CSRPartnershipController;
 use App\Http\Controllers\Api\NGOVerificationController;
 use App\Http\Controllers\Api\ImpactProofController;
@@ -26,14 +28,16 @@ use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\GhanaCardVerificationController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\TripController;
+use App\Http\Controllers\Api\HealthController;
+
+// Health check (for deployment verification)
+Route::get('/health', [HealthController::class]);
 
 // Public routes
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/change-expired-password', [AuthController::class, 'changeExpiredPassword']);
-
-// Test route (remove in production)
-Route::get('/test/users', [\App\Http\Controllers\Api\TestController::class, 'checkUsers']);
 
 Route::prefix('urgency')->group(function () {
     Route::post('/calculate', [UrgencyController::class, 'calculate']);
@@ -44,6 +48,7 @@ Route::prefix('urgency')->group(function () {
 
 // Ghana Card verification (public for Register; works with or without auth for consent logging)
 Route::middleware('throttle:10,1')->post('/verify-ghana-card', [GhanaCardVerificationController::class, 'verify']);
+Route::middleware('throttle:10,1')->post('/verify-ghana-card-with-images', [GhanaCardVerificationController::class, 'verifyWithImages']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -52,6 +57,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware(['auth:sanctum', 'password.expired'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
+
+    // QoreID SDK result (requires auth - stores verification for current user)
+    Route::middleware('throttle:10,1')->post('/verify-ghana-card-qoreid-result', [GhanaCardVerificationController::class, 'storeQoreIdResult']);
 
     // Users - admin dashboard (list users for stats: recipients, pending verification)
     Route::get('/users', [UserController::class, 'index']);
@@ -98,6 +106,12 @@ Route::middleware(['auth:sanctum', 'password.expired'])->group(function () {
     // Delivery Routes
     Route::apiResource('delivery-routes', DeliveryRouteController::class);
     
+    // Trips - Real-time driver tracking & last-mile verification
+    Route::apiResource('trips', TripController::class);
+    Route::put('/trips/{trip}/update-location', [TripController::class, 'updateLocation']);
+    Route::post('/trips/{trip}/arrive', [TripController::class, 'arrive']);
+    Route::post('/trips/{trip}/complete', [TripController::class, 'complete']);
+
     // Logistics
     Route::apiResource('logistics', LogisticController::class);
     Route::get('/logistics/track/{trackingNumber}', [LogisticController::class, 'track']);
@@ -111,11 +125,15 @@ Route::middleware(['auth:sanctum', 'password.expired'])->group(function () {
     
     // Donations - requires verification for creation
     Route::get('/donations', [DonationController::class, 'index']);
+    Route::get('/donations/corporate-tax-stats', [DonationController::class, 'corporateTaxStats']);
+    Route::put('/donations/tax-profile', [DonationController::class, 'updateTaxProfile']);
     Route::get('/donations/{donation}', [DonationController::class, 'show']);
     Route::post('/donations', [DonationController::class, 'store'])->middleware('verified.user');
     Route::put('/donations/{donation}', [DonationController::class, 'update']);
     Route::put('/donations/{donation}/lock-price', [DonationController::class, 'lockPrice']);
+    Route::post('/donations/{donation}/confirm-receipt', [DonationController::class, 'confirmReceipt']);
     Route::put('/donations/{donation}/assign-warehouse', [DonationController::class, 'assignWarehouse']);
+    Route::get('/donations/{donation}/certificate', [DonationCertificateController::class, '__invoke']);
     
     // Financials - statistics must be before apiResource so /statistics isn't matched as {id}
     Route::get('/financials/statistics', [FinancialController::class, 'getStatistics']);
@@ -134,6 +152,7 @@ Route::middleware(['auth:sanctum', 'password.expired'])->group(function () {
     
     // CSR Matchmaking & Impact Tracking
     Route::prefix('matchmaking')->group(function () {
+        Route::get('/ngos', [MatchmakingController::class, 'getNGOs']);
         Route::get('/matches', [MatchmakingController::class, 'getMatches']);
         Route::get('/project/{projectId}/matches', [MatchmakingController::class, 'getProjectMatches']);
     });
@@ -143,8 +162,14 @@ Route::middleware(['auth:sanctum', 'password.expired'])->group(function () {
         Route::get('/dashboard', [ImpactDashboardController::class, 'getImpactData']);
     });
     
+    // Organizations (NGO profile)
+    Route::get('/organization', [OrganizationController::class, 'show']);
+    Route::post('/organization', [OrganizationController::class, 'store']);
+    Route::put('/organization', [OrganizationController::class, 'update']);
+
     // Projects (NGO, Corporate)
     Route::apiResource('projects', ProjectController::class);
+    Route::post('/projects/{project}/submit', [ProjectController::class, 'submit']);
     
     // CSR Partnerships
     Route::apiResource('csr-partnerships', CSRPartnershipController::class);

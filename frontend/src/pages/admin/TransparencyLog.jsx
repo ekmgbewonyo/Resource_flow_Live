@@ -1,4 +1,4 @@
-// ## Transparency Log Component (Audit Trail UI)
+// ## Audit Logs Component (Audit Trail UI)
 // ## Shows "Old vs. New" value comparison for all resource movements
 import React, { useState, useEffect } from 'react';
 import { FileText, Search, Filter, User, Clock, ArrowRight, Eye, Calendar } from 'lucide-react';
@@ -123,7 +123,7 @@ const TransparencyLog = () => {
     <div className="p-6 bg-white min-h-screen">
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-lg font-bold text-slate-800">Transparency Log</h2>
+        <h2 className="text-lg font-bold text-slate-800">Audit Logs</h2>
         <p className="text-slate-600 mt-1">Complete audit trail of all system changes and resource movements</p>
       </div>
 

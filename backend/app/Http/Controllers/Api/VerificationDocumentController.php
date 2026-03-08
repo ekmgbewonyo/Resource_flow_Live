@@ -196,7 +196,7 @@ class VerificationDocumentController extends Controller
             
             // Check if user has all required documents verified
             $requiredDocs = ['Ghana Card'];
-            if ($user->role === 'supplier') {
+            if ($user->isDonorInstitution()) {
                 $requiredDocs[] = 'Business Registration';
             }
 
@@ -267,7 +267,9 @@ class VerificationDocumentController extends Controller
     {
         return match ($role) {
             'requestor', 'recipient' => 'requester_submitted_at',
-            'supplier' => 'supplier_uploaded_at',
+            'ngo' => 'supplier_uploaded_at',
+            'donor_institution' => 'supplier_uploaded_at',
+            'donor_individual' => 'supplier_uploaded_at',
             'field_agent' => 'field_agent_verified_at',
             'admin' => 'admin_reviewed_at',
             default => null,

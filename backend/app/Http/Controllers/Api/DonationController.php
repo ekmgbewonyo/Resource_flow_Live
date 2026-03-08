@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreDonationRequest;
 use App\Http\Resources\DonationResource;
 use App\Models\Donation;
 use App\Models\Request as AidRequest;
 use App\Models\User;
+use App\Services\DonationComplianceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -35,6 +37,14 @@ class DonationController extends Controller
             $query->where('aid_request_id', $request->aid_request_id);
         }
 
+        if ($request->has('receipt_confirmed')) {
+            if (filter_var($request->receipt_confirmed, FILTER_VALIDATE_BOOLEAN)) {
+                $query->whereNotNull('receipt_confirmed_at');
+            } else {
+                $query->whereNull('receipt_confirmed_at');
+            }
+        }
+
         $donations = $query->orderBy('created_at', 'desc')->get();
         return response()->json(DonationResource::collection($donations));
     }
@@ -46,23 +56,25 @@ class DonationController extends Controller
         return response()->json(new DonationResource($donation));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreDonationRequest $request): JsonResponse
     {
         $this->authorize('create', Donation::class);
-        $validated = $request->validate([
-            'type' => 'required|in:Goods,Monetary,Services',
-            'item' => 'required|string|max:255',
-            'quantity' => 'required|numeric|min:0.01',
-            'unit' => 'required|string|max:50',
-            'description' => 'nullable|string',
-            'warehouse_id' => 'nullable|exists:warehouses,id',
-            'colocation_facility' => 'nullable|string|max:255',
-            'colocation_sub_location' => 'nullable|string|max:255',
-            'expiry_date' => 'nullable|date',
-            'aid_request_id' => 'nullable|exists:requests,id',
-        ]);
+        $validated = $request->validated();
 
         $supplier = $request->user();
+        $compliance = app(DonationComplianceService::class);
+
+        $amount = $validated['type'] === 'Monetary'
+            ? (float) $validated['quantity']
+            : ((float) ($validated['value'] ?? $validated['quantity']));
+
+        $validated['donor_type'] = $compliance->resolveDonorType($supplier);
+        $validated['is_anonymous'] = $supplier->isDonorIndividual() && $amount <= DonationComplianceService::INDIVIDUAL_ANONYMOUS_LIMIT
+            ? (bool) $request->input('is_anonymous', false)
+            : false;
+        $validated['compliance_agreed'] = $supplier->isDonorInstitution()
+            ? (bool) $request->input('compliance_agreed', false)
+            : false;
         $validated['user_id'] = $supplier->id;
         $validated['remaining_quantity'] = $validated['quantity'];
 
@@ -194,6 +206,35 @@ class DonationController extends Controller
         return $phoneMatch || $ghanaCardMatch;
     }
 
+    /**
+     * Confirm receipt - Admin confirms physical receipt of donated goods.
+     * Required before item appears in inventory for Auditor price review.
+     */
+    public function confirmReceipt(Request $request, Donation $donation): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin()) {
+            return response()->json(['message' => 'Only admins can confirm receipt.'], 403);
+        }
+
+        if ($donation->type !== 'Goods') {
+            return response()->json(['message' => 'Only Goods donations require receipt confirmation.'], 422);
+        }
+
+        if ($donation->receipt_confirmed_at) {
+            return response()->json(['message' => 'Receipt already confirmed.'], 422);
+        }
+
+        $donation->update([
+            'receipt_confirmed_at' => now(),
+            'receipt_confirmed_by' => $user->id,
+            'date_received' => $donation->date_received ?? now(),
+        ]);
+
+        $donation->load(['user', 'warehouse', 'auditor', 'receiptConfirmedBy']);
+        return response()->json(new DonationResource($donation));
+    }
+
     public function update(Request $request, Donation $donation): JsonResponse
     {
         $this->authorize('update', $donation);
@@ -225,10 +266,8 @@ class DonationController extends Controller
             'audited_price' => $validated['audited_price'],
             'price_status' => 'Locked',
             'audited_by' => $request->user()->id,
-            'audited_at' => now(),
             'locked_at' => now(),
-            'locked_by' => $request->user()->name,
-            // Transition status from Pending to Verified when price is locked
+            // Transition status to Verified when price is locked (item now in inventory with authorized value)
             'status' => 'Verified',
         ]);
 
@@ -270,5 +309,40 @@ class DonationController extends Controller
 
         $donation->load(['user', 'warehouse', 'auditor']);
         return response()->json(new DonationResource($donation));
+    }
+
+    /**
+     * Get corporate donor tax stats (assessable income, 10% limit, YTD donations, remaining cap).
+     */
+    public function corporateTaxStats(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isDonorInstitution()) {
+            return response()->json(['message' => 'Corporate donors only.'], 403);
+        }
+
+        $stats = app(DonationComplianceService::class)->getCorporateTaxStats($user);
+        return response()->json($stats);
+    }
+
+    /**
+     * Update donor tax profile (assessable_annual_income) - corporate donors only.
+     */
+    public function updateTaxProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isDonorInstitution()) {
+            return response()->json(['message' => 'Corporate donors only.'], 403);
+        }
+
+        $validated = $request->validate([
+            'assessable_annual_income' => 'required|numeric|min:0',
+        ]);
+
+        $user->update(['assessable_annual_income' => $validated['assessable_annual_income']]);
+        return response()->json([
+            'message' => 'Tax profile updated.',
+            'assessable_annual_income' => (float) $user->assessable_annual_income,
+        ]);
     }
 }

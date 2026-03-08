@@ -6,11 +6,13 @@ use App\Models\Allocation;
 use App\Models\DeliveryRoute;
 use App\Models\Donation;
 use App\Models\Logistic;
+use App\Models\Trip;
 use App\Observers\DeliveryRouteObserver;
 use App\Policies\AllocationPolicy;
 use App\Policies\DeliveryRoutePolicy;
 use App\Policies\DonationPolicy;
 use App\Policies\LogisticPolicy;
+use App\Policies\TripPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -27,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
         Donation::class => DonationPolicy::class,
         Allocation::class => AllocationPolicy::class,
         Logistic::class => LogisticPolicy::class,
+        Trip::class => TripPolicy::class,
     ];
 
     /**

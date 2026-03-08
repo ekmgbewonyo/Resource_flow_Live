@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, ArrowLeft, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, CheckCircle, AlertCircle, Loader2, Camera } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { FileUpload } from '../../components/ui/FileUpload';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/shared/StatusBadge';
 import GhanaCardVerificationBanner from '../../components/verification/GhanaCardVerificationBanner';
+import GhanaCardCapture from '../../components/verification/GhanaCardCapture';
 import { ghanaCardApi, verificationDocumentApi } from '../../services/api';
 
 const DocumentUpload = () => {
@@ -22,8 +23,11 @@ const DocumentUpload = () => {
   const [verifying, setVerifying] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [useCapture, setUseCapture] = useState(false);
+  const [ghanaCardVerifiedViaCapture, setGhanaCardVerifiedViaCapture] = useState(false);
 
-  const isSupplier = role === 'supplier';
+  const needsBusinessReg = role === 'ngo' || role === 'donor_institution';
+  const businessRegRequired = role === 'ngo'; // NGO must upload RG; donor_institution optional
 
   const getNameParts = () => {
     const name = (user?.name || '').trim();
@@ -82,14 +86,14 @@ const DocumentUpload = () => {
     
     setSubmitting(true);
 
-    // Validate required documents
-    if (!ghanaCardFile) {
-      alert('Please upload your Ghana Card document.');
+    // Validate required documents (either capture verified or file upload)
+    if (!ghanaCardVerifiedViaCapture && !ghanaCardFile) {
+      alert('Please upload your Ghana Card document or complete the camera capture verification.');
       setSubmitting(false);
       return;
     }
 
-    if (!ghanaCardNumber) {
+    if (!ghanaCardVerifiedViaCapture && !ghanaCardNumber) {
       alert('Please provide your Ghana Card number.');
       setSubmitting(false);
       return;
@@ -101,21 +105,24 @@ const DocumentUpload = () => {
       return;
     }
 
-    if (isSupplier && !businessRegFile) {
-      alert('Please upload your Business Registration document.');
+    if (businessRegRequired && !businessRegFile) {
+      alert('Please upload your NGO Registration (RG) document.');
       setSubmitting(false);
       return;
     }
 
-    if (isSupplier && !businessRegNumber) {
-      alert('Please provide your Business Registration number.');
+    if (businessRegRequired && !businessRegNumber) {
+      alert('Please provide your NGO Registration (RG) number.');
       setSubmitting(false);
       return;
     }
 
     try {
       const { firstname, lastname } = getNameParts();
-      if (ghanaCardFile) {
+      if (ghanaCardVerifiedViaCapture) {
+        // Document already created by verifyWithImages when user is logged in
+        // No need to upload again
+      } else if (ghanaCardFile) {
         await verificationDocumentApi.upload(
           ghanaCardFile,
           'Ghana Card',
@@ -124,10 +131,10 @@ const DocumentUpload = () => {
         );
       }
 
-      if (isSupplier && businessRegFile) {
+      if (needsBusinessReg && businessRegFile) {
         await verificationDocumentApi.upload(
           businessRegFile,
-          'Business Registration',
+          role === 'ngo' ? 'NGO Registration (RG)' : 'Business Registration',
           businessRegNumber
         );
       }
@@ -266,42 +273,81 @@ const DocumentUpload = () => {
                   />
                 )}
 
-                <FileUpload
-                  label="Ghana Card Document"
-                  name="ghanaCardFile"
-                  accept="image/*,.pdf"
-                  required
-                  value={ghanaCardFile}
-                  onChange={setGhanaCardFile}
-                  maxSizeMB={5}
-                  description="Upload a clear photo or scan of your Ghana Card. Include both sides if applicable."
-                />
+                {/* Toggle: Upload vs Capture with camera */}
+                <div className="flex gap-2 mb-4">
+                  <Button
+                    type="button"
+                    variant={!useCapture ? 'primary' : 'outline'}
+                    onClick={() => setUseCapture(false)}
+                    icon={ShieldCheck}
+                  >
+                    Upload Document
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={useCapture ? 'primary' : 'outline'}
+                    onClick={() => setUseCapture(true)}
+                    icon={Camera}
+                  >
+                    Capture with Camera
+                  </Button>
+                </div>
+
+                {ghanaCardVerifiedViaCapture ? (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
+                    <CheckCircle className="text-emerald-600 shrink-0" size={20} />
+                    <p className="text-emerald-800 font-medium">Ghana Card verified via camera capture. You may proceed.</p>
+                  </div>
+                ) : useCapture ? (
+                  <GhanaCardCapture
+                    firstname={getNameParts().firstname}
+                    lastname={getNameParts().lastname}
+                    consentGiven={consentGiven}
+                    onVerified={() => {
+                      setGhanaCardVerifiedViaCapture(true);
+                      setVerificationResult({ type: 'verified', message: 'Ghana Card verified successfully via camera capture.' });
+                    }}
+                    onError={() => setVerificationResult(null)}
+                    disabled={submitting}
+                  />
+                ) : (
+                  <FileUpload
+                    label="Ghana Card Document"
+                    name="ghanaCardFile"
+                    accept="image/*,.pdf"
+                    required={!ghanaCardVerifiedViaCapture}
+                    value={ghanaCardFile}
+                    onChange={setGhanaCardFile}
+                    maxSizeMB={5}
+                    description="Upload a clear photo or scan of your Ghana Card. Include both sides if applicable."
+                  />
+                )}
               </div>
             </div>
 
-            {/* Business Registration Section (Supplier Only) */}
-            {isSupplier && (
+            {/* NGO Registration / Business Registration Section */}
+            {needsBusinessReg && (
               <div className="border border-slate-200 rounded-xl p-6 bg-slate-50/50">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
                     <ShieldCheck className="text-purple-600" size={18} />
                   </div>
                   <h3 className="text-lg font-bold text-slate-800">
-                    Business Registration
+                    {role === 'ngo' ? 'NGO Registration (RG)' : 'Business Registration'}
                   </h3>
-                  <span className="text-xs text-red-500 ml-2">Required</span>
+                  {businessRegRequired && <span className="text-xs text-red-500 ml-2">Required</span>}
                 </div>
 
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm font-semibold text-slate-600 mb-2 block">
-                      Business Registration Number
+                      {role === 'ngo' ? 'NGO Registration Number (RG)' : 'Business Registration Number'}
                     </label>
                     <input
                       type="text"
                       value={businessRegNumber}
                       onChange={(e) => setBusinessRegNumber(e.target.value)}
-                      placeholder="BN-2024-0000"
+                      placeholder={role === 'ngo' ? 'RG-XXXX' : 'BN-2024-0000'}
                       className="w-full border p-2 rounded border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       // Validation handled in handleSubmit
                     />

@@ -1,12 +1,14 @@
 // ## Delivery Dashboard Component
-// ## Timeline view of delivery status updates using DeliveryRoutes and Logistics
+// ## Timeline view of delivery status updates using DeliveryRoutes, Logistics, and Live Trips
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, MapPin, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Navigation, Package } from 'lucide-react';
-import { deliveryRouteApi, logisticApi } from '../../services/api';
+import { Truck, MapPin, Calendar, Clock, CheckCircle, XCircle, AlertCircle, Navigation, Package, Radio, ChevronRight } from 'lucide-react';
+import { deliveryRouteApi, logisticApi, tripApi } from '../../services/api';
 import { StatusBadge } from '../../components/shared/StatusBadge';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { LiveMapTracker } from '../../components/logistics/LiveMapTracker';
+import { RouteMapView } from '../../components/logistics/RouteMapView';
 import { formatGHC } from '../../utils/currency';
 import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
@@ -14,25 +16,30 @@ const DeliveryDashboard = () => {
   const navigate = useNavigate();
   const [deliveryRoutes, setDeliveryRoutes] = useState([]);
   const [logistics, setLogistics] = useState([]);
+  const [trips, setTrips] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
+  const [selectedTrip, setSelectedTrip] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState('routes'); // 'routes' | 'trips'
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [routesData, logisticsData] = await Promise.all([
+      const [routesData, logisticsData, tripsData] = await Promise.all([
         deliveryRouteApi.getAll(),
         logisticApi.getAll(),
+        tripApi.getAll().catch(() => []),
       ]);
-      // Ensure both are always arrays
       setDeliveryRoutes(Array.isArray(routesData) ? routesData : []);
       setLogistics(Array.isArray(logisticsData) ? logisticsData : []);
+      setTrips(Array.isArray(tripsData) ? tripsData : []);
     } catch (error) {
       console.error('Error loading delivery data:', error);
-      setDeliveryRoutes([]); // Set to empty array on error
+      setDeliveryRoutes([]);
       setLogistics([]);
+      setTrips([]);
     } finally {
       setLoading(false);
     }
@@ -45,8 +52,8 @@ const DeliveryDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // ## Auto-refresh when deliveries or allocations are created
-  useAutoRefresh(loadData, ['delivery', 'allocation'], []);
+  // ## Auto-refresh when deliveries, allocations, or trips are created
+  useAutoRefresh(loadData, ['delivery', 'allocation', 'trip'], []);
 
   // Ensure deliveryRoutes is an array before filtering
   const filteredRoutes = Array.isArray(deliveryRoutes) ? deliveryRoutes.filter((route) => {
@@ -128,16 +135,45 @@ const DeliveryDashboard = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-lg font-bold text-slate-800">Delivery Dashboard</h2>
-          <p className="text-slate-600 mt-1">Real-time tracking of deliveries and logistics. Same data as Fleet Management.</p>
+          <p className="text-slate-600 mt-1">Delivery routes, logistics, and live trip tracking with verification.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate('/dashboard/logistics')}>
             Fleet Management
           </Button>
+          <Button variant="outline" onClick={() => navigate('/dashboard/trips')}>
+            All Trips
+          </Button>
           <Button onClick={loadData}>
             Refresh
           </Button>
         </div>
+      </div>
+
+      {/* Tabs: Delivery Routes | Live Trips */}
+      <div className="flex gap-2 mb-6 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => { setActiveTab('routes'); setSelectedTrip(null); }}
+          className={`px-4 py-2 font-medium text-sm border-b-2 transition ${
+            activeTab === 'routes'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Delivery Routes
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('trips')}
+          className={`px-4 py-2 font-medium text-sm border-b-2 transition ${
+            activeTab === 'trips'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Live Trips
+        </button>
       </div>
 
       {/* Statistics */}
@@ -166,35 +202,118 @@ const DeliveryDashboard = () => {
         </div>
       </div>
 
-      {/* Search and Filter */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <Input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search routes..."
-              className="pl-10"
-            />
+      {/* Live Trips Stats (when on trips tab) */}
+      {activeTab === 'trips' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <p className="text-sm text-slate-600">Active Trips</p>
+            <p className="text-lg font-bold text-slate-800 mt-1">
+              {trips.filter(t => ['pending', 'started', 'arrived'].includes(t.status)).length}
+            </p>
           </div>
-          <div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="Scheduled">Scheduled</option>
-              <option value="In Transit">In Transit</option>
-              <option value="Delivered">Delivered</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+            <p className="text-sm text-slate-600">Completed</p>
+            <p className="text-lg font-bold text-emerald-600 mt-1">
+              {trips.filter(t => t.status === 'completed').length}
+            </p>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Delivery Routes with Timeline */}
+      {/* Search and Filter (routes tab only) */}
+      {activeTab === 'routes' && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="relative">
+              <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search routes..."
+                className="pl-10"
+              />
+            </div>
+            <div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="Scheduled">Scheduled</option>
+                <option value="In Transit">In Transit</option>
+                <option value="Delivered">Delivered</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Trips: List + Map */}
+      {activeTab === 'trips' && (
+        <div className="space-y-6 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h3 className="font-bold text-slate-800 mb-3">Trips</h3>
+              {trips.length === 0 ? (
+                <div className="bg-slate-50 rounded-xl p-8 text-center">
+                  <Radio className="w-12 h-12 mx-auto text-slate-300 mb-2" />
+                  <p className="text-slate-500">No trips yet</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {trips.map((trip) => (
+                    <div
+                      key={trip.id}
+                      onClick={() => setSelectedTrip(selectedTrip?.id === trip.id ? null : trip)}
+                      className={`p-4 rounded-xl border cursor-pointer transition ${
+                        selectedTrip?.id === trip.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-slate-800">
+                            {trip.request?.title || `Trip #${trip.id}`}
+                          </p>
+                          <p className="text-sm text-slate-500">
+                            Driver: {trip.driver?.name || '—'} • {trip.status}
+                          </p>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-400" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 mb-3">Live Map</h3>
+              {selectedTrip ? (
+                <div className="space-y-2">
+                  <LiveMapTracker tripId={selectedTrip.id} trip={selectedTrip} />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/dashboard/trips/${selectedTrip.id}`)}
+                  >
+                    View Trip Details
+                  </Button>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl h-[400px] flex items-center justify-center border border-slate-200">
+                  <p className="text-slate-500">Select a trip to view live location</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Routes with Timeline (routes tab only) */}
+      {activeTab === 'routes' && (
       <div className="space-y-6">
         {filteredRoutes.length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-xl">
@@ -235,6 +354,18 @@ const DeliveryDashboard = () => {
                     {selectedRoute?.id === route.id ? 'Hide Details' : 'View Details'}
                   </Button>
                 </div>
+
+                {/* Route Map - Uber/Bolt style when View Details expanded */}
+                {selectedRoute?.id === route.id && (
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <RouteMapView
+                      route={route}
+                      logistics={route.logistics || routeLogistics}
+                      trip={trips.find((t) => t.delivery_route_id === route.id)}
+                      routeName={route.route_name}
+                    />
+                  </div>
+                )}
 
                 {/* Timeline for each package */}
                 {routeLogistics.length > 0 && (
@@ -317,6 +448,7 @@ const DeliveryDashboard = () => {
           })
         )}
       </div>
+      )}
     </div>
   );
 };

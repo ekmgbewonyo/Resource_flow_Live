@@ -38,14 +38,14 @@ class FinancialController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'transaction_type' => 'required|in:Donation,Allocation,Expense,Refund',
+            'transaction_type' => 'required|in:Donation,Allocation,Expense,Refund,Project Funding,General Support',
             'user_id' => 'nullable|exists:users,id',
             'donation_id' => 'nullable|exists:donations,id',
             'allocation_id' => 'nullable|exists:allocations,id',
             'amount' => 'required|numeric|min:0',
             'currency' => 'nullable|string|max:3',
             'payment_reference' => 'nullable|string|max:255',
-            'payment_method' => 'nullable|in:card,mobile_money,bank_transfer,cash',
+            'payment_method' => 'nullable|in:card,mobile_money,bank_transfer,cash,paystack',
             'status' => 'nullable|in:Pending,Completed,Failed,Refunded',
             'description' => 'nullable|string',
             'transaction_date' => 'required|date',

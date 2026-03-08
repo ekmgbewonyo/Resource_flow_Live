@@ -34,7 +34,6 @@ export const AuthProvider = ({ children }) => {
             if (cancelled) return;
             setUser(userData);
             let frontendRole = userData.role;
-            if (userData.role === 'donor') frontendRole = 'supplier';
             if (userData.role === 'requestor') frontendRole = 'recipient';
             setRole(frontendRole || null);
             setIsVerified(userData.is_verified || false);
@@ -77,7 +76,6 @@ export const AuthProvider = ({ children }) => {
         // ## Map backend role to frontend role
         // Backend uses 'donor' and 'requestor', frontend uses 'supplier' and 'recipient'
         let frontendRole = response.user.role;
-        if (response.user.role === 'donor') frontendRole = 'supplier';
         if (response.user.role === 'requestor') frontendRole = 'recipient';
         setRole(frontendRole || null);
         setIsVerified(response.user.is_verified || false);
@@ -164,7 +162,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('auth_user', JSON.stringify(response.user));
       setUser(response.user);
       let frontendRole = response.user.role;
-      if (response.user.role === 'donor') frontendRole = 'supplier';
       if (response.user.role === 'requestor') frontendRole = 'recipient';
       setRole(frontendRole || null);
       setIsVerified(response.user.is_verified || false);

@@ -16,11 +16,17 @@ import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import DocumentUpload from './pages/auth/DocumentUpload';
 
+// NGO Pages
+import NGODashboard from './pages/ngo/NGODashboard';
+import ProjectDetailPage from './pages/ngo/ProjectDetailPage';
+import OrganizationSetup from './pages/ngo/OrganizationSetup';
+
 // Supplier Pages
 import SupplierDashboard from './pages/supplier/SupplierDashboard';
 import CreateDonation from './pages/supplier/CreateDonation';
 import Projects from './pages/supplier/Projects';
 import AvailableRequests from './pages/supplier/AvailableRequests';
+import FindNGOs from './pages/supplier/FindNGOs';
 
 // Recipient Pages
 import RecipientDashboard from './pages/recipient/RecipientDashboard';
@@ -57,6 +63,10 @@ import FieldAgentDashboard from './pages/fieldagent/FieldAgentDashboard';
 import UploadProof from './pages/fieldagent/UploadProof';
 import MyProofs from './pages/fieldagent/MyProofs';
 
+// Driver / Logistics Pages
+import DriverTripPage from './pages/driver/DriverTripPage';
+import TripsListPage from './pages/driver/TripsListPage';
+
 // Auth Pages
 import VerificationWait from './pages/auth/VerificationWait';
 
@@ -69,18 +79,19 @@ const DashboardIndex = () => {
   // ## Return role-specific dashboard component based on backend role
   if (role === 'admin') {
     return <AdminDashboard />;
-  } else if (role === 'supplier' || role === 'donor') {
-    // Handle both 'supplier' and 'donor' roles (donor is mapped to supplier in useAuth)
+  } else if (role === 'ngo') {
+    return <NGODashboard />;
+  } else if (role === 'donor_institution') {
+    return <SupplierDashboard />;
+  } else if (role === 'donor_individual') {
+    return <SupplierDashboard />;
+  } else if (role === 'angel_donor') {
     return <SupplierDashboard />;
   } else if (role === 'auditor') {
     return <ValuationReview />;
   } else if (role === 'recipient' || role === 'requestor') {
     // Handle both 'recipient' and 'requestor' roles (requestor is backend term)
     return <RecipientDashboard />;
-  } else if (role === 'ngo') {
-    return <RecipientDashboard />; // TODO: Create NGODashboard component
-  } else if (role === 'corporate') {
-    return <SupplierDashboard />; // TODO: Create CorporateDashboard component
   } else if (role === 'field_agent') {
     return <FieldAgentDashboard />;
   } else if (role === 'driver' || role === 'supervisor') {
@@ -123,7 +134,7 @@ const AppRoutes = () => {
         <Route
           index
           element={
-            <RoleProtectedRoute allowedRoles={['supplier', 'admin', 'recipient', 'auditor', 'ngo', 'corporate', 'field_agent', 'driver', 'supervisor', 'special']}>
+            <RoleProtectedRoute allowedRoles={['ngo', 'donor_institution', 'donor_individual', 'angel_donor', 'admin', 'recipient', 'auditor', 'field_agent', 'driver', 'supervisor', 'special']}>
               <DashboardIndex />
             </RoleProtectedRoute>
           }
@@ -131,7 +142,7 @@ const AppRoutes = () => {
         <Route
           path="donate"
           element={
-            <RoleProtectedRoute allowedRoles={['supplier']} requiresVerification>
+            <RoleProtectedRoute allowedRoles={['donor_institution', 'donor_individual', 'angel_donor']} requiresVerification>
               <CreateDonation />
             </RoleProtectedRoute>
           }
@@ -139,7 +150,7 @@ const AppRoutes = () => {
         <Route
           path="available-requests"
           element={
-            <RoleProtectedRoute allowedRoles={['supplier', 'corporate', 'donor']}>
+            <RoleProtectedRoute allowedRoles={['donor_institution', 'donor_individual', 'angel_donor']}>
               <AvailableRequests />
             </RoleProtectedRoute>
           }
@@ -147,7 +158,7 @@ const AppRoutes = () => {
         <Route
           path="documents"
           element={
-            <RoleProtectedRoute allowedRoles={['supplier', 'recipient', 'ngo', 'corporate', 'field_agent']}>
+            <RoleProtectedRoute allowedRoles={['ngo', 'donor_institution', 'donor_individual', 'recipient', 'field_agent']}>
               <DocumentUpload />
             </RoleProtectedRoute>
           }
@@ -237,7 +248,7 @@ const AppRoutes = () => {
         <Route
           path="impact"
           element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
+            <RoleProtectedRoute allowedRoles={['admin', 'donor_institution', 'donor_individual', 'angel_donor']}>
               <ImpactDashboard />
             </RoleProtectedRoute>
           }
@@ -279,7 +290,7 @@ const AppRoutes = () => {
         <Route
           path="request"
           element={
-            <RoleProtectedRoute allowedRoles={['recipient', 'ngo']} requiresVerification>
+            <RoleProtectedRoute allowedRoles={['recipient']} requiresVerification>
               <CreateRequest />
             </RoleProtectedRoute>
           }
@@ -289,7 +300,7 @@ const AppRoutes = () => {
         <Route
           path="profile"
           element={
-            <RoleProtectedRoute allowedRoles={['admin', 'supplier', 'recipient', 'auditor', 'ngo', 'corporate', 'field_agent', 'driver', 'supervisor', 'special']}>
+            <RoleProtectedRoute allowedRoles={['admin', 'ngo', 'donor_institution', 'donor_individual', 'angel_donor', 'recipient', 'auditor', 'field_agent', 'driver', 'supervisor', 'special']}>
               <UserProfile />
             </RoleProtectedRoute>
           }
@@ -329,19 +340,35 @@ const AppRoutes = () => {
           }
         />
         
-        {/* NGO Routes */}
+        {/* NGO Routes - Organization, Projects (create/view) */}
         <Route
           path="projects"
           element={
-            <RoleProtectedRoute allowedRoles={['ngo', 'corporate', 'supplier', 'field_agent']}>
+            <RoleProtectedRoute allowedRoles={['donor_institution', 'donor_individual', 'angel_donor', 'field_agent']}>
               <Projects />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="organization"
+          element={
+            <RoleProtectedRoute allowedRoles={['ngo']}>
+              <OrganizationSetup />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="projects/:id"
+          element={
+            <RoleProtectedRoute allowedRoles={['ngo', 'donor_institution', 'donor_individual', 'angel_donor', 'admin']}>
+              <ProjectDetailPage />
             </RoleProtectedRoute>
           }
         />
         <Route
           path="partnerships"
           element={
-            <RoleProtectedRoute allowedRoles={['ngo', 'corporate']}>
+            <RoleProtectedRoute allowedRoles={['donor_institution']}>
               <div className="p-6 bg-white min-h-screen">
                 <h2 className="text-xl font-bold text-slate-800">Partnerships</h2>
                 <p className="text-slate-600 mt-2">Coming soon...</p>
@@ -352,18 +379,15 @@ const AppRoutes = () => {
         <Route
           path="matchmaking"
           element={
-            <RoleProtectedRoute allowedRoles={['corporate']}>
-              <div className="p-6 bg-white min-h-screen">
-                <h2 className="text-xl font-bold text-slate-800">Find NGOs</h2>
-                <p className="text-slate-600 mt-2">Coming soon...</p>
-              </div>
+            <RoleProtectedRoute allowedRoles={['donor_institution', 'donor_individual', 'angel_donor']}>
+              <FindNGOs />
             </RoleProtectedRoute>
           }
         />
         <Route
           path="upload-proof"
           element={
-            <RoleProtectedRoute allowedRoles={['field_agent']}>
+            <RoleProtectedRoute allowedRoles={['field_agent', 'ngo']}>
               <UploadProof />
             </RoleProtectedRoute>
           }
@@ -371,7 +395,7 @@ const AppRoutes = () => {
         <Route
           path="proofs"
           element={
-            <RoleProtectedRoute allowedRoles={['field_agent']}>
+            <RoleProtectedRoute allowedRoles={['field_agent', 'ngo']}>
               <MyProofs />
             </RoleProtectedRoute>
           }
@@ -381,6 +405,23 @@ const AppRoutes = () => {
           element={
             <RoleProtectedRoute allowedRoles={['admin', 'supervisor']}>
               <TeamManagement />
+            </RoleProtectedRoute>
+          }
+        />
+        {/* Driver / Logistics - Trips */}
+        <Route
+          path="trips"
+          element={
+            <RoleProtectedRoute allowedRoles={['driver', 'admin', 'supervisor']}>
+              <TripsListPage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="trips/:tripId"
+          element={
+            <RoleProtectedRoute allowedRoles={['driver', 'admin', 'supervisor']}>
+              <DriverTripPage />
             </RoleProtectedRoute>
           }
         />

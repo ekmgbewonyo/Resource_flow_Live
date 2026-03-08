@@ -1,5 +1,5 @@
 // ## User Verification View
-// ## Admin interface for verifying users (Suppliers and Recipients)
+// ## Admin interface for verifying users (Donors and Recipients)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, CheckCircle, XCircle, Search, Filter, FileText, ShieldCheck, Mail, Phone, MapPin, Ban, Unlock, Loader2, ExternalLink } from 'lucide-react';
@@ -10,7 +10,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 
 // Roles that require verification (exclude admin and staff)
-const VERIFICATION_ROLES = ['supplier', 'recipient', 'donor', 'requestor', 'ngo', 'corporate'];
+const VERIFICATION_ROLES = ['ngo', 'donor_institution', 'donor_individual', 'recipient', 'requestor'];
 
 const UserVerification = () => {
   const navigate = useNavigate();
@@ -41,7 +41,7 @@ const UserVerification = () => {
             id: u.id,
             name: u.name,
             email: u.email,
-            role: u.role === 'donor' ? 'supplier' : u.role === 'requestor' ? 'recipient' : u.role,
+            role: u.role === 'requestor' ? 'recipient' : u.role,
             ghanaCard: u.ghana_card || null,
             businessReg: null,
             verificationStatus: u.is_verified ? 'Verified' : (u.verification_status === 'rejected' ? 'Rejected' : 'Pending'),
@@ -83,7 +83,7 @@ const UserVerification = () => {
     pending: allUsers.filter(u => u.verificationStatus === 'Pending').length,
     verified: allUsers.filter(u => u.verificationStatus === 'Verified').length,
     rejected: allUsers.filter(u => u.verificationStatus === 'Rejected').length,
-    suppliers: allUsers.filter(u => u.role === 'supplier').length,
+    donors: allUsers.filter(u => ['ngo', 'donor_institution', 'donor_individual'].includes(u.role)).length,
     recipients: allUsers.filter(u => u.role === 'recipient').length,
     blocked: allUsers.filter(u => u.is_blocked).length + blockedUsers.filter(u => u.status === 'blocked').length,
   };
@@ -97,7 +97,7 @@ const UserVerification = () => {
           id: u.id,
           name: u.name,
           email: u.email,
-          role: u.role === 'donor' ? 'supplier' : u.role === 'requestor' ? 'recipient' : u.role,
+          role: u.role === 'requestor' ? 'recipient' : u.role,
           ghanaCard: u.ghana_card || null,
           businessReg: null,
           verificationStatus: u.is_verified ? 'Verified' : (u.verification_status === 'rejected' ? 'Rejected' : 'Pending'),
@@ -250,7 +250,7 @@ const UserVerification = () => {
       {/* ## Header */}
       <div>
         <h2 className="text-lg font-bold text-slate-800">User Verification</h2>
-        <p className="text-slate-500 mt-1">Review and verify user accounts for Suppliers and Recipients</p>
+        <p className="text-slate-500 mt-1">Review and verify user accounts for Donors and Recipients</p>
       </div>
 
       {error && (
@@ -309,8 +309,8 @@ const UserVerification = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-lg">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-700">Suppliers</span>
-            <span className="text-lg font-bold text-emerald-600">{stats.suppliers}</span>
+            <span className="text-sm font-medium text-slate-700">Donors</span>
+            <span className="text-lg font-bold text-emerald-600">{stats.donors}</span>
           </div>
         </div>
         <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
@@ -357,10 +357,10 @@ const UserVerification = () => {
             className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Roles</option>
-            <option value="supplier">Suppliers</option>
-            <option value="recipient">Recipients</option>
             <option value="ngo">NGOs</option>
-            <option value="corporate">Corporate</option>
+            <option value="donor_institution">Donors (Institution)</option>
+            <option value="donor_individual">Donors (Individual)</option>
+            <option value="recipient">Recipients</option>
           </select>
         </div>
       </div>
@@ -418,9 +418,9 @@ const UserVerification = () => {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-                        user.role === 'supplier' ? 'bg-emerald-100 text-emerald-700' : user.role === 'recipient' ? 'bg-yellow-100 text-yellow-700' : user.role === 'ngo' ? 'bg-teal-100 text-teal-700' : user.role === 'corporate' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'
+                        user.role === 'ngo' ? 'bg-emerald-100 text-emerald-700' : user.role === 'donor_institution' ? 'bg-teal-100 text-teal-700' : user.role === 'donor_individual' ? 'bg-cyan-100 text-cyan-700' : user.role === 'recipient' ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-700'
                       }`}>
-                        {user.role === 'supplier' ? 'Supplier' : user.role === 'recipient' ? 'Recipient' : user.role === 'ngo' ? 'NGO' : user.role === 'corporate' ? 'Corporate' : user.role}
+                        {user.role === 'ngo' ? 'NGO' : user.role === 'donor_institution' ? 'Donor (Institution)' : user.role === 'donor_individual' ? 'Donor (Individual)' : user.role === 'recipient' ? 'Recipient' : user.role}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -428,7 +428,7 @@ const UserVerification = () => {
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm text-slate-700 font-mono">
-                        {user.businessReg || (user.role === 'supplier' ? 'Not provided' : 'N/A')}
+                        {user.businessReg || (['ngo', 'donor_institution'].includes(user.role) ? 'Not provided' : 'N/A')}
                       </p>
                     </td>
                     <td className="px-6 py-4">
@@ -548,11 +548,15 @@ const UserVerification = () => {
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Role</p>
                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
-                      selectedUser.role === 'supplier' 
+                      selectedUser.role === 'ngo' 
                         ? 'bg-emerald-100 text-emerald-700' 
+                        : selectedUser.role === 'donor_institution' 
+                        ? 'bg-teal-100 text-teal-700' 
+                        : selectedUser.role === 'donor_individual'
+                        ? 'bg-cyan-100 text-cyan-700'
                         : 'bg-yellow-100 text-yellow-700'
                     }`}>
-                      {selectedUser.role === 'supplier' ? 'Supplier' : 'Recipient'}
+                      {selectedUser.role === 'ngo' ? 'NGO' : selectedUser.role === 'donor_institution' ? 'Donor (Institution)' : selectedUser.role === 'donor_individual' ? 'Donor (Individual)' : 'Recipient'}
                     </span>
                   </div>
                   <div>
@@ -573,9 +577,9 @@ const UserVerification = () => {
                     <p className="text-xs text-slate-500 mb-1">Ghana Card Number</p>
                     <p className="text-sm font-medium text-slate-900 font-mono">{selectedUser.ghanaCard || 'Not provided'}</p>
                   </div>
-                  {selectedUser.role === 'supplier' && (
+                  {(selectedUser.role === 'ngo' || selectedUser.role === 'donor_institution') && (
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">Business Registration</p>
+                      <p className="text-xs text-slate-500 mb-1">{selectedUser.role === 'ngo' ? 'NGO Registration (RG)' : 'Business Registration'}</p>
                       <p className="text-sm font-medium text-slate-900 font-mono">{selectedUser.businessReg || 'Not provided'}</p>
                     </div>
                   )}

@@ -515,10 +515,12 @@ class RequestController extends Controller
         }
 
         // Fix #6: Validate that delivery was completed before allowing request completion
+        // Supports both flows: (1) DeliveryRoute/Logistic flow, (2) Trip flow
         if ($request->allocations()->exists()) {
             $hasDeliveredAllocation = $request->allocations()
-                ->whereHas('deliveryRoute', function ($query) {
-                    $query->where('status', 'Delivered');
+                ->where(function ($q) {
+                    $q->where('status', 'Delivered')
+                        ->orWhereHas('deliveryRoute', fn ($dr) => $dr->where('status', 'Delivered'));
                 })
                 ->exists();
 

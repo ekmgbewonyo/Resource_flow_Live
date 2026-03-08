@@ -48,6 +48,16 @@ class Allocation extends Model
         return $this->hasOne(Logistic::class);
     }
 
+    public function deliveryRoute()
+    {
+        return $this->hasOne(DeliveryRoute::class);
+    }
+
+    public function trips()
+    {
+        return $this->hasMany(Trip::class);
+    }
+
     /**
      * Scope queries by authenticated user role
      */

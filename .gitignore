@@ -1,2 +1,6 @@
 # Deployment config with credentials - never commit
 scripts/vps-deploy-config
+
+# macOS metadata
+.DS_Store
+._*

@@ -61,6 +61,9 @@ if [ "$FRONTEND_ONLY" = false ]; then
   php artisan config:cache
   php artisan route:cache
 
+  echo "   Ensuring storage directories exist..."
+  mkdir -p storage/app/public/{requests,verifications,donations,uploads}
+
   echo "   Linking storage..."
   php artisan storage:link 2>/dev/null || true
 
@@ -95,5 +98,7 @@ echo "Next steps:"
 echo "  1. Deploy backend: upload backend/ to server, point web root to backend/public"
 echo "  2. Deploy frontend: upload frontend/dist/ to static host"
 echo "  3. Configure Paystack webhook: https://api.yourdomain.com/api/payments/paystack-webhook"
-echo "  4. Change Super Admin password after first login"
+echo "  4. Ensure Supervisor runs: php artisan queue:work (if using queues)"
+echo "  5. Configure cron: * * * * * cd backend && php artisan schedule:run >> /dev/null 2>&1"
+echo "  6. Change Super Admin password after first login"
 echo ""

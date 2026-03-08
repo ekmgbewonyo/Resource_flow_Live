@@ -11,14 +11,21 @@ class Project extends Model
 
     protected $fillable = [
         'ngo_id',
+        'organization_id',
         'title',
+        'slug',
         'description',
         'need_type',
         'sdg_goals',
         'budget',
+        'target_amount',
         'funded_amount',
+        'raised_amount',
         'impact_metrics',
         'location',
+        'location_gps',
+        'cover_photo_path',
+        'proof_documents',
         'status',
         'start_date',
         'end_date',
@@ -30,8 +37,11 @@ class Project extends Model
     protected $casts = [
         'sdg_goals' => 'array',
         'impact_metrics' => 'array',
+        'proof_documents' => 'array',
         'budget' => 'decimal:2',
+        'target_amount' => 'decimal:2',
         'funded_amount' => 'decimal:2',
+        'raised_amount' => 'decimal:2',
         'start_date' => 'datetime',
         'end_date' => 'datetime',
         'verified_at' => 'datetime',
@@ -42,6 +52,16 @@ class Project extends Model
     public function ngo()
     {
         return $this->belongsTo(User::class, 'ngo_id');
+    }
+
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
+    public function projectBudgets()
+    {
+        return $this->hasMany(ProjectBudget::class);
     }
 
     public function verifier()
@@ -72,14 +92,24 @@ class Project extends Model
     // Helper methods
     public function getFundingProgressAttribute()
     {
-        if (!$this->budget || $this->budget == 0) {
-            return 0;
-        }
-        return min(100, ($this->funded_amount / $this->budget) * 100);
+        $target = $this->effective_target_amount;
+        $raised = $this->effective_raised_amount;
+        if (!$target || $target == 0) return 0;
+        return min(100, ($raised / $target) * 100);
     }
 
     public function getRemainingBudgetAttribute()
     {
-        return max(0, $this->budget - $this->funded_amount);
+        return max(0, $this->effective_target_amount - $this->effective_raised_amount);
+    }
+
+    public function getEffectiveTargetAmountAttribute(): float
+    {
+        return (float) ($this->attributes['target_amount'] ?? $this->attributes['budget'] ?? 0);
+    }
+
+    public function getEffectiveRaisedAmountAttribute(): float
+    {
+        return (float) ($this->attributes['raised_amount'] ?? $this->attributes['funded_amount'] ?? 0);
     }
 }

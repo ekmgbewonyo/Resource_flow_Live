@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\DeliveryRoute;
 use App\Models\Logistic;
+use App\Models\Trip;
 use Illuminate\Support\Str;
 
 class DeliveryRouteObserver
@@ -24,6 +25,21 @@ class DeliveryRouteObserver
                 'tracking_number' => $trackingNumber,
                 'location_updates' => [],
             ]);
+        }
+
+        // Auto-create Trip when DeliveryRoute has driver and allocation (for driver delivery flow)
+        if ($deliveryRoute->driver_id && $deliveryRoute->allocation_id) {
+            $allocation = $deliveryRoute->allocation;
+            $requestId = $allocation?->request_id;
+            if ($requestId && !Trip::where('delivery_route_id', $deliveryRoute->id)->exists()) {
+                Trip::create([
+                    'driver_id' => $deliveryRoute->driver_id,
+                    'request_id' => $requestId,
+                    'allocation_id' => $deliveryRoute->allocation_id,
+                    'delivery_route_id' => $deliveryRoute->id,
+                    'status' => 'pending',
+                ]);
+            }
         }
     }
 

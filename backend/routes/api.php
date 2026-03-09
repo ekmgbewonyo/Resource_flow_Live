@@ -119,8 +119,10 @@ Route::middleware(['auth:sanctum', 'password.expired'])->group(function () {
     Route::post('/logistics/{logistic}/complete-delivery', [LogisticController::class, 'completeDelivery']);
     
     // Verification Documents
+    Route::post('/verification-documents/admin-review', [VerificationDocumentController::class, 'storeForAdminReview']);
     Route::apiResource('verification-documents', VerificationDocumentController::class);
     Route::post('/verification-documents/{verificationDocument}/verify', [VerificationDocumentController::class, 'verify']);
+    Route::post('/verification-documents/{verificationDocument}/verify-via-qoreid', [VerificationDocumentController::class, 'verifyViaQoreid']);
     Route::get('/verification-documents/{verificationDocument}/download', [VerificationDocumentController::class, 'download']);
     
     // Donations - requires verification for creation
@@ -149,6 +151,7 @@ Route::middleware(['auth:sanctum', 'password.expired'])->group(function () {
     // File Uploads - with rate limiting
     Route::middleware('throttle:uploads')->post('/files/upload', [FileUploadController::class, 'upload']);
     Route::middleware('throttle:uploads-multiple')->post('/files/upload-multiple', [FileUploadController::class, 'uploadMultiple']);
+    Route::get('/files/download', [FileUploadController::class, 'download']);
     
     // CSR Matchmaking & Impact Tracking
     Route::prefix('matchmaking')->group(function () {

@@ -269,6 +269,38 @@ export interface MapDataResponse {
   };
 }
 
+/** Download or view files by storage path (e.g. requests/uuid.ext) */
+export const filesApi = {
+  getDownloadUrl: (path: string): string => {
+    const base = apiClient.defaults.baseURL?.replace(/\/api\/?$/, '') || '';
+    return `${base}/api/files/download?path=${encodeURIComponent(path)}`;
+  },
+  /** Fetch file with auth and trigger download, or open in new tab for viewable types */
+  downloadOrView: async (path: string, openInNewTab = false): Promise<void> => {
+    const token = localStorage.getItem('auth_token');
+    const url = filesApi.getDownloadUrl(path);
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error(res.status === 404 ? 'File not found' : 'Download failed');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const ext = (path.split('.').pop() || '').toLowerCase();
+    const viewable = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (openInNewTab && viewable.includes(ext)) {
+      window.open(blobUrl, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+    } else {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = path.split('/').pop() || 'document';
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    }
+  },
+};
+
 export const requestApi = {
   uploadFile: async (formData: FormData): Promise<{
     success: boolean;
@@ -662,8 +694,11 @@ export const ghanaCardApi = {
 export const verificationDocumentApi = {
   getAll: async (params?: { user_id?: number; verification_status?: string }): Promise<VerificationDocument[]> => {
     const response = await apiClient.get<{ data?: VerificationDocument[] } | VerificationDocument[]>('/verification-documents', { params });
-    const data = response.data;
-    return Array.isArray(data) ? data : (data?.data ?? []);
+    const raw = response.data;
+    // Handle Laravel ResourceCollection: { data: [...] }, direct array [...], or nested
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.data)) return raw.data;
+    return [];
   },
 
   getById: async (id: number): Promise<VerificationDocument> => {
@@ -689,6 +724,31 @@ export const verificationDocumentApi = {
       formData.append('consent_given', options.consent_given ? '1' : '0');
     }
     const response = await apiClient.post<VerificationDocument>('/verification-documents', formData);
+    return response.data;
+  },
+
+  /** Submit Ghana Card + selfie for admin review (no QoreID). Admin can authorize and optionally run QoreID later. */
+  uploadForAdminReview: async (
+    ghanaCardFile: File,
+    selfieFile: File,
+    documentNumber: string,
+    options: { firstname: string; lastname: string; consent_given: boolean }
+  ): Promise<VerificationDocument> => {
+    const formData = new FormData();
+    formData.append('ghana_card_image', ghanaCardFile);
+    formData.append('selfie_image', selfieFile);
+    formData.append('document_number', documentNumber.trim());
+    formData.append('firstname', options.firstname);
+    formData.append('lastname', options.lastname);
+    formData.append('consent_given', options.consent_given ? '1' : '0');
+    const response = await apiClient.post<VerificationDocument>('/verification-documents/admin-review', formData);
+    return response.data;
+  },
+
+  verifyViaQoreid: async (id: number): Promise<{ verified: boolean; message?: string; document?: VerificationDocument }> => {
+    const response = await apiClient.post<{ verified: boolean; message?: string; document?: VerificationDocument }>(
+      `/verification-documents/${id}/verify-via-qoreid`
+    );
     return response.data;
   },
 

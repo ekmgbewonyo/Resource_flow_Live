@@ -220,18 +220,21 @@ class RequestController extends Controller
     }
 
     /**
-     * Get available requests for suppliers (approved and unclaimed)
+     * Get available requests for donors.
+     * Includes both pending (awaiting admin approval) and approved requests
+     * so donors can see all requests by requestors.
      */
     public function getAvailableRequests(HttpRequest $httpRequest): JsonResponse
     {
         try {
             $requests = Request::query()->notExpired()
                 ->with(['user', 'assignedSupplier', 'contributions.supplier'])
-                ->where('status', 'approved')
+                ->whereIn('status', ['pending', 'approved'])
                 ->where(function ($query) {
                     $query->whereNull('assigned_supplier_id')
                           ->orWhereIn('funding_status', ['unfunded', 'partially_funded']);
                 })
+                ->orderByRaw("CASE WHEN status = 'approved' THEN 0 ELSE 1 END")
                 ->orderBy('urgency_score', 'desc')
                 ->orderBy('created_at', 'desc')
                 ->get();

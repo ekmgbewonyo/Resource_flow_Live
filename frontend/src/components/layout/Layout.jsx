@@ -7,6 +7,7 @@ import {
   UserCheck,
   Users,
   Package,
+  ClipboardList,
   Map,
   FileBarChart,
   Bell,
@@ -58,6 +59,7 @@ const Layout = () => {
   const navigation = {
     admin: [
       { name: 'Overview', icon: LayoutDashboard, path: '/dashboard' },
+      { name: 'All Requests', icon: ClipboardList, path: '/dashboard/all-requests' },
       { name: 'Verifications', icon: UserCheck, path: '/dashboard/verify-users' },
       { name: 'Verification Center', icon: FileText, path: '/dashboard/verification-center' },
       { name: 'Flagged Requests', icon: Flag, path: '/dashboard/flagged-requests' },
@@ -111,6 +113,7 @@ const Layout = () => {
     auditor: [
       { name: 'Valuation Queue', icon: Lock, path: '/dashboard/valuation' },
       { name: 'NGO Verification', icon: UserCheck, path: '/dashboard/ngo-verification' },
+      { name: 'Verification Center', icon: FileText, path: '/dashboard/verification-center' },
       { name: 'Monetary Transfers', icon: DollarSign, path: '/dashboard/transfers' },
       { name: 'Audit Logs', icon: FileBarChart, path: '/dashboard/audit-logs' },
     ],

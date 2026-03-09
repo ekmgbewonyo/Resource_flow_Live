@@ -48,6 +48,7 @@ import TransparencyLog from './pages/admin/TransparencyLog';
 import ImpactDashboard from './pages/admin/ImpactDashboard';
 import WarehouseAssignment from './pages/admin/WarehouseAssignment';
 import FlaggedRequests from './pages/admin/FlaggedRequests';
+import AllRequests from './pages/admin/AllRequests';
 import UserManagement from './pages/admin/UserManagement';
 import TeamManagement from './pages/admin/TeamManagement';
 import UserProfile from './pages/shared/UserProfile';
@@ -166,6 +167,14 @@ const AppRoutes = () => {
         
         {/* Admin Routes */}
         <Route
+          path="all-requests"
+          element={
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <AllRequests />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
           path="verify-users"
           element={
             <RoleProtectedRoute allowedRoles={['admin']}>
@@ -176,7 +185,7 @@ const AppRoutes = () => {
         <Route
           path="verification-center"
           element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
+            <RoleProtectedRoute allowedRoles={['admin', 'auditor']}>
               <VerificationCenter />
             </RoleProtectedRoute>
           }

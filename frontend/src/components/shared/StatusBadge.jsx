@@ -9,6 +9,7 @@ export const StatusBadge = ({ status, size = 'md', variant = 'light' }) => {
 
   const statusStylesLight = {
     Pending: 'bg-amber-100 text-amber-700',
+    'Pending Approval': 'bg-amber-100 text-amber-700',
     Verified: 'bg-emerald-100 text-emerald-700',
     Rejected: 'bg-red-100 text-red-700',
     Open: 'bg-blue-100 text-blue-700',
@@ -26,10 +27,18 @@ export const StatusBadge = ({ status, size = 'md', variant = 'light' }) => {
     Reserved: 'bg-blue-100 text-blue-700',
     Disbursed: 'bg-slate-100 text-slate-700',
     Unavailable: 'bg-red-100 text-red-700',
+    'Fully Funded': 'bg-emerald-100 text-emerald-700',
+    'Partially Funded': 'bg-blue-100 text-blue-700',
+    Unfunded: 'bg-slate-100 text-slate-700',
+    Approved: 'bg-emerald-100 text-emerald-700',
+    Claimed: 'bg-blue-100 text-blue-700',
+    Completed: 'bg-emerald-100 text-emerald-700',
+    Cancelled: 'bg-red-100 text-red-700',
   };
 
   const statusStylesDark = {
     Pending: 'bg-amber-400/20 text-amber-300 border border-amber-400/30',
+    'Pending Approval': 'bg-amber-400/20 text-amber-300 border border-amber-400/30',
     Verified: 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30',
     Rejected: 'bg-red-400/20 text-red-300 border border-red-400/30',
     Open: 'bg-blue-400/20 text-blue-300 border border-blue-400/30',
@@ -47,13 +56,20 @@ export const StatusBadge = ({ status, size = 'md', variant = 'light' }) => {
     Reserved: 'bg-blue-400/20 text-blue-300 border border-blue-400/30',
     Disbursed: 'bg-slate-400/20 text-slate-300 border border-slate-400/30',
     Unavailable: 'bg-red-400/20 text-red-300 border border-red-400/30',
+    'Fully Funded': 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30',
+    'Partially Funded': 'bg-blue-400/20 text-blue-300 border border-blue-400/30',
+    Unfunded: 'bg-slate-400/20 text-slate-300 border border-slate-400/30',
+    Approved: 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30',
+    Claimed: 'bg-blue-400/20 text-blue-300 border border-blue-400/30',
+    Completed: 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30',
+    Cancelled: 'bg-red-400/20 text-red-300 border border-red-400/30',
   };
 
   const statusStyles = variant === 'dark' ? statusStylesDark : statusStylesLight;
 
   return (
     <span
-      className={`${sizeClasses[size]} ${statusStyles[status]} rounded-full font-bold uppercase tracking-wider`}
+      className={`${sizeClasses[size]} ${statusStyles[status] || 'bg-slate-100 text-slate-700'} rounded-full font-bold uppercase tracking-wider`}
     >
       {status.replace('_', ' ')}
     </span>

@@ -107,11 +107,14 @@ const AvailableRequests = () => {
             const totalFunded = request.total_funded_percentage || 0;
             const remaining = request.remaining_percentage || (100 - totalFunded);
             const fundingStatus = request.funding_status || 'unfunded';
+            const isPending = request.status === 'pending';
 
             return (
               <div
                 key={request.id}
-                className="bg-white border-2 border-slate-200 rounded-xl p-6 hover:border-emerald-300 transition-all shadow-sm"
+                className={`bg-white border-2 rounded-xl p-6 transition-all shadow-sm ${
+                  isPending ? 'border-amber-200 hover:border-amber-300' : 'border-slate-200 hover:border-emerald-300'
+                }`}
               >
                 {/* Header */}
                 <div className="mb-4">
@@ -121,7 +124,9 @@ const AvailableRequests = () => {
                     </h3>
                     <StatusBadge
                       status={
-                        fundingStatus === 'fully_funded'
+                        isPending
+                          ? 'Pending Approval'
+                          : fundingStatus === 'fully_funded'
                           ? 'Fully Funded'
                           : fundingStatus === 'partially_funded'
                           ? 'Partially Funded'
@@ -184,6 +189,7 @@ const AvailableRequests = () => {
                     variant="outline"
                     className="flex-1"
                     icon={Gift}
+                    disabled={isPending}
                   >
                     Donate Goods
                   </Button>
@@ -191,9 +197,11 @@ const AvailableRequests = () => {
                     onClick={() => handleFundClick(request)}
                     className="flex-1"
                     icon={TrendingUp}
-                    disabled={fundingStatus === 'fully_funded' || remaining === 0}
+                    disabled={isPending || fundingStatus === 'fully_funded' || remaining === 0}
                   >
-                    {fundingStatus === 'fully_funded'
+                    {isPending
+                      ? 'Awaiting Approval'
+                      : fundingStatus === 'fully_funded'
                       ? 'Fully Funded'
                       : remaining === 0
                       ? 'No Remaining'
@@ -201,8 +209,16 @@ const AvailableRequests = () => {
                   </Button>
                 </div>
 
+                {/* Info if pending approval */}
+                {isPending && (
+                  <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    Awaiting admin approval. Donate once approved.
+                  </p>
+                )}
+
                 {/* Warning if fully funded */}
-                {fundingStatus === 'fully_funded' && (
+                {!isPending && fundingStatus === 'fully_funded' && (
                   <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
                     <AlertCircle size={12} />
                     This request is fully funded

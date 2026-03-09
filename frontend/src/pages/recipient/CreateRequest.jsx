@@ -16,6 +16,12 @@ const CreateRequest = () => {
   const [errors, setErrors] = useState({});
   const [uploadedFiles, setUploadedFiles] = useState([]);
 
+  const GHANA_REGIONS = [
+    'Greater Accra', 'Ashanti', 'Central', 'Eastern', 'Western',
+    'Northern', 'Upper East', 'Upper West', 'Volta', 'Bono',
+    'Bono East', 'Ahafo', 'Savannah', 'North East', 'Oti', 'Western North',
+  ];
+
   // ## Form state
   const [formData, setFormData] = useState({
     title: '',
@@ -25,6 +31,9 @@ const CreateRequest = () => {
     need_type: 'emergency_food',
     time_sensitivity: '24_to_72h',
     recipient_type: 'rural_clinic',
+    region: '',
+    quantity_required: '',
+    unit: 'units',
     availability_gap: 50,
     admin_override: 0,
   });
@@ -90,6 +99,7 @@ const CreateRequest = () => {
     if (formData.aid_type === 'Other' && !formData.custom_aid_type.trim()) {
       newErrors.custom_aid_type = 'Please specify the aid type';
     }
+    if (!formData.region) newErrors.region = 'Region is required for mapping requests to the heat map';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -196,10 +206,14 @@ const CreateRequest = () => {
       }
 
       // ## Submit request via API
-      const newRequest = await requestApi.create({
+      const payload = {
         ...formData,
         supporting_documents: supportingDocuments,
-      });
+        region: formData.region || null,
+        quantity_required: formData.quantity_required ? parseFloat(formData.quantity_required) : null,
+        unit: formData.unit || null,
+      };
+      const newRequest = await requestApi.create(payload);
 
       // ## Set flag to trigger dashboard refresh
       localStorage.setItem('request_created', Date.now().toString());
@@ -306,6 +320,46 @@ const CreateRequest = () => {
                 placeholder="e.g., Agricultural Support, Water Supply"
               />
             )}
+            <div>
+              <label className="text-sm font-semibold text-slate-600 mb-2 block">
+                Location (Region) *
+              </label>
+              <select
+                name="region"
+                value={formData.region}
+                onChange={handleChange}
+                className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  errors.region ? 'border-red-500' : 'border-slate-200'
+                }`}
+              >
+                <option value="">Select region where aid is needed</option>
+                {GHANA_REGIONS.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">Required for heat map visualization and allocation</p>
+              {errors.region && (
+                <p className="text-xs text-red-500 mt-1">{errors.region}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Quantity Required"
+                name="quantity_required"
+                type="number"
+                min="0"
+                value={formData.quantity_required}
+                onChange={handleChange}
+                placeholder="e.g., 100"
+              />
+              <Input
+                label="Unit"
+                name="unit"
+                value={formData.unit}
+                onChange={handleChange}
+                placeholder="e.g., units, bags, boxes"
+              />
+            </div>
             <div>
               <label className="text-sm font-semibold text-slate-600 mb-2 block">
                 Description *

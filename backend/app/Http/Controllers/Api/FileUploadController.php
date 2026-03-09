@@ -12,6 +12,42 @@ use Illuminate\Support\Str;
 
 class FileUploadController extends Controller
 {
+    /** Allowed storage subdirs for download (no path traversal) */
+    private const ALLOWED_DOWNLOAD_PREFIXES = ['requests/', 'verifications/', 'donations/', 'delivery_proofs/', 'projects/', 'uploads/'];
+
+    /**
+     * Download a file by path (authenticated users - admin or request owner).
+     * Path must be within allowed storage directories.
+     */
+    public function download(Request $request)
+    {
+        $path = $request->query('path');
+        if (empty($path) || !is_string($path)) {
+            return response()->json(['message' => 'Path is required'], 400);
+        }
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+        if (str_contains($path, '..')) {
+            return response()->json(['message' => 'Invalid path'], 400);
+        }
+        $allowed = false;
+        foreach (self::ALLOWED_DOWNLOAD_PREFIXES as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                $allowed = true;
+                break;
+            }
+        }
+        if (!$allowed) {
+            return response()->json(['message' => 'Access denied'], 403);
+        }
+        $disk = Storage::disk('public');
+        if (!$disk->exists($path)) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
+        $filename = basename($path);
+        $fullPath = $disk->path($path);
+        return response()->download($fullPath, $filename);
+    }
+
     /**
      * Upload a file for requests or other entities
      */

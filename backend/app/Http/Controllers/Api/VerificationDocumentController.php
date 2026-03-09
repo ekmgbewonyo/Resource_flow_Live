@@ -48,10 +48,56 @@ class VerificationDocumentController extends Controller
         return response()->json(new VerificationDocumentResource($verificationDocument));
     }
 
+    /**
+     * Submit Ghana Card + selfie for admin review only (no QoreID).
+     * User provides: Ghana Card number, Ghana Card image, selfie.
+     * Admin can authorize later; admin can optionally run through QoreID.
+     */
+    public function storeForAdminReview(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'document_number' => 'required|string|max:50',
+            'ghana_card_image' => 'required|file|mimes:jpg,jpeg,png|max:5120',
+            'selfie_image' => 'required|file|mimes:jpg,jpeg,png|max:5120',
+            'firstname' => 'required|string|max:100',
+            'lastname' => 'required|string|max:100',
+            'consent_given' => 'required|accepted',
+        ]);
+
+        $user = $request->user();
+        $documentNumber = trim($validated['document_number']);
+
+        $ghanaCardFile = $request->file('ghana_card_image');
+        $selfieFile = $request->file('selfie_image');
+
+        $ghanaCardPath = $ghanaCardFile->store('verification-documents', 'public');
+        $selfieBase64 = base64_encode(file_get_contents($selfieFile->getRealPath()));
+
+        $roleTimestamp = $this->getRoleTimestampForUpload($user->role);
+        $ref = 'admin_review_' . $user->id . '_' . time();
+
+        $document = VerificationDocument::create(array_merge([
+            'user_id' => $user->id,
+            'document_type' => 'Ghana Card',
+            'document_number' => $documentNumber,
+            'file_path' => $ghanaCardPath,
+            'file_name' => $ghanaCardFile->getClientOriginalName(),
+            'mime_type' => $ghanaCardFile->getMimeType(),
+            'file_size' => $ghanaCardFile->getSize(),
+            'verification_status' => 'Pending',
+            'qoreid_request_id' => $ref,
+            'qoreid_photo' => 'data:image/jpeg;base64,' . $selfieBase64,
+            'notes' => 'Submitted for admin review (QoreID bypass). Admin can authorize and optionally run through QoreID later.',
+        ], $roleTimestamp ? [$roleTimestamp => now()] : []));
+
+        $document->load(['user']);
+        return response()->json(new VerificationDocumentResource($document), 201);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'document_type' => 'required|in:Ghana Card,Business Registration,Tax Certificate,Other',
+            'document_type' => 'required|in:Ghana Card,Business Registration,NGO Registration (RG),Tax Certificate,Other',
             'document_number' => 'nullable|string|max:255',
             'firstname' => 'nullable|string|max:100',
             'lastname' => 'nullable|string|max:100',
@@ -61,6 +107,10 @@ class VerificationDocumentController extends Controller
 
         $user = $request->user();
         $documentType = $validated['document_type'];
+        // Map NGO Registration (RG) to Business Registration for DB enum compatibility
+        if ($documentType === 'NGO Registration (RG)') {
+            $documentType = 'Business Registration';
+        }
         $documentNumber = $validated['document_number'] ?? null;
 
         $qoreidRequestId = null;
@@ -216,6 +266,66 @@ class VerificationDocumentController extends Controller
 
         $verificationDocument->load(['user', 'verifier']);
         return response()->json(new VerificationDocumentResource($verificationDocument));
+    }
+
+    /**
+     * Admin runs an existing Ghana Card document through QoreID for NIA verification.
+     * Uses document_number and user's name. Updates document with qoreid_verified_at on success.
+     */
+    public function verifyViaQoreid(Request $request, VerificationDocument $verificationDocument): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->isAdmin() && !$user->isSuperAdmin() && !$user->isAuditor()) {
+            return response()->json(['message' => 'Unauthorized. Only Admins or Auditors can run QoreID verification.'], 403);
+        }
+
+        if ($verificationDocument->document_type !== 'Ghana Card') {
+            return response()->json(['message' => 'Only Ghana Card documents can be verified via QoreID.'], 422);
+        }
+
+        $documentNumber = $verificationDocument->document_number;
+        if (empty($documentNumber)) {
+            return response()->json(['message' => 'Document has no Ghana Card number. Cannot verify via QoreID.'], 422);
+        }
+
+        $docUser = $verificationDocument->user;
+        $nameParts = preg_split('/\s+/', trim($docUser->name ?? ''), 2);
+        $firstname = $nameParts[0] ?? '';
+        $lastname = $nameParts[1] ?? $firstname;
+
+        if (empty($firstname) || empty($lastname)) {
+            return response()->json(['message' => 'User profile has no valid name. Update user name before QoreID verification.'], 422);
+        }
+
+        $result = GhanaCardVerificationService::verifyGhanaCard(
+            $documentNumber,
+            $firstname,
+            $lastname,
+            $docUser->id,
+            true
+        );
+
+        if (!empty($result['verified'])) {
+            $verificationDocument->update([
+                'qoreid_request_id' => $result['request_id'] ?? $verificationDocument->qoreid_request_id,
+                'qoreid_verified_at' => now(),
+                'notes' => ($verificationDocument->notes ?? '') . ' [QoreID verified by admin ' . now()->toIso8601String() . ']',
+            ]);
+            $verificationDocument->load(['user', 'verifier']);
+            return response()->json([
+                'verified' => true,
+                'message' => 'Ghana Card verified successfully via QoreID.',
+                'document' => new VerificationDocumentResource($verificationDocument),
+            ]);
+        }
+
+        $errorCode = $result['error_code'] ?? 'VERIFICATION_FAILED';
+        $statusCode = in_array($errorCode, ['UNAUTHORIZED', 'SERVER_ERROR', 'EXCEPTION'], true) ? 503 : 422;
+        return response()->json([
+            'verified' => false,
+            'message' => $result['error'] ?? 'QoreID verification failed.',
+            'error_code' => $errorCode,
+        ], $statusCode);
     }
 
     public function download(VerificationDocument $verificationDocument)

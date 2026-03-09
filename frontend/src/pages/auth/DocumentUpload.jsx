@@ -13,6 +13,7 @@ const DocumentUpload = () => {
   const { user, role, isVerified } = useAuth();
   const navigate = useNavigate();
   const [ghanaCardFile, setGhanaCardFile] = useState(null);
+  const [selfieFile, setSelfieFile] = useState(null);
   const [businessRegFile, setBusinessRegFile] = useState(null);
   const [ghanaCardNumber, setGhanaCardNumber] = useState(user?.ghanaCard || '');
   const [businessRegNumber, setBusinessRegNumber] = useState(
@@ -25,6 +26,7 @@ const DocumentUpload = () => {
   const [success, setSuccess] = useState(false);
   const [useCapture, setUseCapture] = useState(false);
   const [ghanaCardVerifiedViaCapture, setGhanaCardVerifiedViaCapture] = useState(false);
+  const [submitMode, setSubmitMode] = useState('qoreid'); // 'qoreid' | 'admin_review'
 
   const needsBusinessReg = role === 'ngo' || role === 'donor_institution';
   const businessRegRequired = role === 'ngo'; // NGO must upload RG; donor_institution optional
@@ -80,37 +82,87 @@ const DocumentUpload = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Prevent default HTML5 validation for hidden file inputs
     e.stopPropagation();
-    
     setSubmitting(true);
 
-    // Validate required documents (either capture verified or file upload)
+    const { firstname, lastname } = getNameParts();
+
+    if (submitMode === 'admin_review') {
+      if (!ghanaCardNumber?.trim()) {
+        alert('Please provide your Ghana Card number.');
+        setSubmitting(false);
+        return;
+      }
+      if (!ghanaCardFile) {
+        alert('Please upload your Ghana Card image.');
+        setSubmitting(false);
+        return;
+      }
+      if (!selfieFile) {
+        alert('Please upload your selfie photo.');
+        setSubmitting(false);
+        return;
+      }
+      if (!consentGiven) {
+        alert('Please confirm your consent for Ghana Card verification (required under Ghana Data Protection Act).');
+        setSubmitting(false);
+        return;
+      }
+      if (!firstname || !lastname) {
+        alert('Your profile name is required. Please update your profile with your legal first and last name.');
+        setSubmitting(false);
+        return;
+      }
+
+      try {
+        await verificationDocumentApi.uploadForAdminReview(
+          ghanaCardFile,
+          selfieFile,
+          ghanaCardNumber.trim(),
+          { firstname, lastname, consent_given: true }
+        );
+        if (needsBusinessReg && businessRegFile && businessRegNumber) {
+          await verificationDocumentApi.upload(
+            businessRegFile,
+            role === 'ngo' ? 'NGO Registration (RG)' : 'Business Registration',
+            businessRegNumber
+          );
+        }
+        setSuccess(true);
+        setTimeout(() => {
+          localStorage.setItem('verification_created', Date.now().toString());
+          navigate('/dashboard');
+        }, 2000);
+      } catch (error) {
+        console.error('Error submitting for admin review:', error);
+        setVerificationResult({ type: 'error', message: error.response?.data?.message || 'Failed to submit. Please try again.' });
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // QoreID flow
     if (!ghanaCardVerifiedViaCapture && !ghanaCardFile) {
       alert('Please upload your Ghana Card document or complete the camera capture verification.');
       setSubmitting(false);
       return;
     }
-
     if (!ghanaCardVerifiedViaCapture && !ghanaCardNumber) {
       alert('Please provide your Ghana Card number.');
       setSubmitting(false);
       return;
     }
-
     if (!consentGiven) {
       alert('Please confirm your consent for Ghana Card verification (required under Ghana Data Protection Act).');
       setSubmitting(false);
       return;
     }
-
     if (businessRegRequired && !businessRegFile) {
       alert('Please upload your NGO Registration (RG) document.');
       setSubmitting(false);
       return;
     }
-
     if (businessRegRequired && !businessRegNumber) {
       alert('Please provide your NGO Registration (RG) number.');
       setSubmitting(false);
@@ -118,10 +170,8 @@ const DocumentUpload = () => {
     }
 
     try {
-      const { firstname, lastname } = getNameParts();
       if (ghanaCardVerifiedViaCapture) {
         // Document already created by verifyWithImages when user is logged in
-        // No need to upload again
       } else if (ghanaCardFile) {
         await verificationDocumentApi.upload(
           ghanaCardFile,
@@ -130,7 +180,6 @@ const DocumentUpload = () => {
           { firstname, lastname, consent_given: true }
         );
       }
-
       if (needsBusinessReg && businessRegFile) {
         await verificationDocumentApi.upload(
           businessRegFile,
@@ -138,10 +187,8 @@ const DocumentUpload = () => {
           businessRegNumber
         );
       }
-
       setSuccess(true);
       setTimeout(() => {
-        // Set flag to trigger refresh in VerificationCenter
         localStorage.setItem('verification_created', Date.now().toString());
         navigate('/dashboard');
       }, 2000);
@@ -205,8 +252,9 @@ const DocumentUpload = () => {
               Documents Submitted Successfully!
             </h3>
             <p className="text-slate-600 mb-6">
-              Your documents have been uploaded and are under review. You will be notified once
-              your account is verified.
+              {submitMode === 'admin_review'
+                ? 'Your documents have been submitted for admin review. An admin will authorize your access shortly. You can transact fully once approved.'
+                : 'Your documents have been uploaded and are under review. You will be notified once your account is verified.'}
             </p>
             <p className="text-sm text-slate-500">Redirecting to dashboard...</p>
           </div>
@@ -221,6 +269,31 @@ const DocumentUpload = () => {
                 <h3 className="text-lg font-bold text-slate-800">Ghana Card</h3>
                 <span className="text-xs text-red-500 ml-2">Required</span>
               </div>
+
+              {/* Mode toggle: QoreID vs Admin Review */}
+              <div className="flex gap-2 mb-6 p-2 bg-slate-100 rounded-lg">
+                <Button
+                  type="button"
+                  variant={submitMode === 'qoreid' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => { setSubmitMode('qoreid'); setVerificationResult(null); }}
+                >
+                  Verify via QoreID (instant)
+                </Button>
+                <Button
+                  type="button"
+                  variant={submitMode === 'admin_review' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => { setSubmitMode('admin_review'); setVerificationResult(null); }}
+                >
+                  Submit for Admin Review
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">
+                {submitMode === 'admin_review'
+                  ? 'Upload Ghana Card + selfie. Admin will authorize your access; QoreID verification can be run later.'
+                  : 'Verify your Ghana Card against NIA database, or use camera capture.'}
+              </p>
 
               <div className="space-y-4">
                 <div>
@@ -237,18 +310,20 @@ const DocumentUpload = () => {
                       }}
                       placeholder="GHA-000000000-0"
                       className="flex-1 border p-2 rounded border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                      required
+                      required={submitMode === 'qoreid'}
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleVerifyGhanaCard}
-                      disabled={verifying || !ghanaCardNumber?.trim()}
-                      icon={verifying ? Loader2 : ShieldCheck}
-                      className="shrink-0"
-                    >
-                      {verifying ? 'Verifying...' : 'Verify'}
-                    </Button>
+                    {submitMode === 'qoreid' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleVerifyGhanaCard}
+                        disabled={verifying || !ghanaCardNumber?.trim()}
+                        icon={verifying ? Loader2 : ShieldCheck}
+                        className="shrink-0"
+                      >
+                        {verifying ? 'Verifying...' : 'Verify'}
+                      </Button>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-1">Format: GHA-XXXXXXXXX-X (e.g. GHA-700000000-0)</p>
                 </div>
@@ -273,54 +348,79 @@ const DocumentUpload = () => {
                   />
                 )}
 
-                {/* Toggle: Upload vs Capture with camera */}
-                <div className="flex gap-2 mb-4">
-                  <Button
-                    type="button"
-                    variant={!useCapture ? 'primary' : 'outline'}
-                    onClick={() => setUseCapture(false)}
-                    icon={ShieldCheck}
-                  >
-                    Upload Document
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={useCapture ? 'primary' : 'outline'}
-                    onClick={() => setUseCapture(true)}
-                    icon={Camera}
-                  >
-                    Capture with Camera
-                  </Button>
-                </div>
-
-                {ghanaCardVerifiedViaCapture ? (
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
-                    <CheckCircle className="text-emerald-600 shrink-0" size={20} />
-                    <p className="text-emerald-800 font-medium">Ghana Card verified via camera capture. You may proceed.</p>
-                  </div>
-                ) : useCapture ? (
-                  <GhanaCardCapture
-                    firstname={getNameParts().firstname}
-                    lastname={getNameParts().lastname}
-                    consentGiven={consentGiven}
-                    onVerified={() => {
-                      setGhanaCardVerifiedViaCapture(true);
-                      setVerificationResult({ type: 'verified', message: 'Ghana Card verified successfully via camera capture.' });
-                    }}
-                    onError={() => setVerificationResult(null)}
-                    disabled={submitting}
-                  />
+                {submitMode === 'admin_review' ? (
+                  <>
+                    <FileUpload
+                      label="Ghana Card Image"
+                      name="ghanaCardFile"
+                      accept="image/*"
+                      required
+                      value={ghanaCardFile}
+                      onChange={setGhanaCardFile}
+                      maxSizeMB={5}
+                      description="Upload a clear photo of your Ghana Card."
+                    />
+                    <FileUpload
+                      label="Selfie Photo"
+                      name="selfieFile"
+                      accept="image/*"
+                      required
+                      value={selfieFile}
+                      onChange={setSelfieFile}
+                      maxSizeMB={5}
+                      description="Upload a clear photo of yourself (selfie) for identity verification."
+                    />
+                  </>
                 ) : (
-                  <FileUpload
-                    label="Ghana Card Document"
-                    name="ghanaCardFile"
-                    accept="image/*,.pdf"
-                    required={!ghanaCardVerifiedViaCapture}
-                    value={ghanaCardFile}
-                    onChange={setGhanaCardFile}
-                    maxSizeMB={5}
-                    description="Upload a clear photo or scan of your Ghana Card. Include both sides if applicable."
-                  />
+                  <>
+                    <div className="flex gap-2 mb-4">
+                      <Button
+                        type="button"
+                        variant={!useCapture ? 'primary' : 'outline'}
+                        onClick={() => setUseCapture(false)}
+                        icon={ShieldCheck}
+                      >
+                        Upload Document
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={useCapture ? 'primary' : 'outline'}
+                        onClick={() => setUseCapture(true)}
+                        icon={Camera}
+                      >
+                        Capture with Camera
+                      </Button>
+                    </div>
+                    {ghanaCardVerifiedViaCapture ? (
+                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
+                        <CheckCircle className="text-emerald-600 shrink-0" size={20} />
+                        <p className="text-emerald-800 font-medium">Ghana Card verified via camera capture. You may proceed.</p>
+                      </div>
+                    ) : useCapture ? (
+                      <GhanaCardCapture
+                        firstname={getNameParts().firstname}
+                        lastname={getNameParts().lastname}
+                        consentGiven={consentGiven}
+                        onVerified={() => {
+                          setGhanaCardVerifiedViaCapture(true);
+                          setVerificationResult({ type: 'verified', message: 'Ghana Card verified successfully via camera capture.' });
+                        }}
+                        onError={() => setVerificationResult(null)}
+                        disabled={submitting}
+                      />
+                    ) : (
+                      <FileUpload
+                        label="Ghana Card Document"
+                        name="ghanaCardFile"
+                        accept="image/*,.pdf"
+                        required={!ghanaCardVerifiedViaCapture}
+                        value={ghanaCardFile}
+                        onChange={setGhanaCardFile}
+                        maxSizeMB={5}
+                        description="Upload a clear photo or scan of your Ghana Card. Include both sides if applicable."
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </div>

@@ -1,7 +1,7 @@
 // ## Verification Center View
 // ## Admin interface for reviewing VerificationDocument uploads
 import React, { useState, useEffect } from 'react';
-import { FileText, CheckCircle, XCircle, Download, Search, Filter, User, Calendar, Upload } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Download, Search, Filter, User, Calendar, Upload, RefreshCw, Loader2 } from 'lucide-react';
 import { verificationDocumentApi } from '../../services/api';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -17,6 +17,7 @@ const VerificationCenter = () => {
   const [verificationStatus, setVerificationStatus] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [loading, setLoading] = useState(true);
+  const [qoreidLoading, setQoreidLoading] = useState(null);
 
   const loadDocuments = async () => {
     try {
@@ -76,7 +77,6 @@ const VerificationCenter = () => {
         verification_status: status,
         rejection_reason: status === 'Rejected' ? reason : undefined,
       });
-      // Set flag to trigger refresh in other dashboards
       localStorage.setItem('verification_created', Date.now().toString());
       await loadDocuments();
       setSelectedDocument(null);
@@ -85,6 +85,29 @@ const VerificationCenter = () => {
     } catch (error) {
       console.error('Error verifying document:', error);
       alert('Failed to verify document. Please try again.');
+    }
+  };
+
+  const handleRunQoreid = async (doc) => {
+    if (!doc.document_number) {
+      alert('Document has no Ghana Card number. Cannot run QoreID verification.');
+      return;
+    }
+    setQoreidLoading(doc.id);
+    try {
+      const result = await verificationDocumentApi.verifyViaQoreid(doc.id);
+      if (result.verified) {
+        alert('Ghana Card verified successfully via QoreID (NIA database).');
+        await loadDocuments();
+        if (selectedDocument?.id === doc.id) setSelectedDocument(null);
+      } else {
+        alert(result.message || 'QoreID verification failed. Check user name and Ghana Card number.');
+      }
+    } catch (error) {
+      const msg = error.response?.data?.message || error.message || 'Failed to run QoreID verification.';
+      alert(msg);
+    } finally {
+      setQoreidLoading(null);
     }
   };
 
@@ -137,9 +160,20 @@ const VerificationCenter = () => {
   return (
     <div className="p-6 bg-white min-h-screen">
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-slate-800">Verification Center</h2>
-        <p className="text-slate-600 mt-1">Review and verify user documents (Ghana Cards, Business Registration, etc.)</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Verification Center</h2>
+          <p className="text-slate-600 mt-1">Review and verify user documents (Ghana Cards, Business Registration, etc.)</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          icon={loading ? Loader2 : RefreshCw}
+          onClick={loadDocuments}
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Refresh'}
+        </Button>
       </div>
 
       {/* Statistics */}
@@ -219,7 +253,7 @@ const VerificationCenter = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Document</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">User ID</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">User</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Size</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 uppercase">Dates</th>
@@ -247,7 +281,9 @@ const VerificationCenter = () => {
                       <span className="text-sm text-slate-700">{doc.document_type}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-slate-700">{doc.user_id}</span>
+                      <span className="text-sm text-slate-700">
+                        {doc.user?.name || doc.user?.email || `ID: ${doc.user_id}`}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm text-slate-600">{formatFileSize(doc.file_size || 0)}</span>
@@ -292,6 +328,19 @@ const VerificationCenter = () => {
                               Reject
                             </Button>
                           </>
+                        )}
+                        {doc.document_type === 'Ghana Card' && doc.document_number && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={qoreidLoading === doc.id ? Loader2 : RefreshCw}
+                            onClick={() => handleRunQoreid(doc)}
+                            disabled={qoreidLoading !== null}
+                            className="text-xs px-2 py-1"
+                            title="Run through QoreID (NIA verification)"
+                          >
+                            {qoreidLoading === doc.id ? 'Running...' : 'QoreID'}
+                          </Button>
                         )}
                         <Button
                           variant="outline"
@@ -348,9 +397,17 @@ const VerificationCenter = () => {
                     <p className="font-medium text-slate-900">{selectedDocument.document_type}</p>
                   </div>
                   <div>
-                    <p className="text-slate-500">User ID</p>
-                    <p className="font-medium text-slate-900">{selectedDocument.user_id}</p>
+                    <p className="text-slate-500">User</p>
+                    <p className="font-medium text-slate-900">
+                      {selectedDocument.user?.name || selectedDocument.user?.email || `ID: ${selectedDocument.user_id}`}
+                    </p>
                   </div>
+                  {selectedDocument.document_type === 'Ghana Card' && selectedDocument.document_number && (
+                    <div className="col-span-2">
+                      <p className="text-slate-500">Ghana Card Number</p>
+                      <p className="font-medium text-slate-900">{selectedDocument.document_number}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-slate-500">File Size</p>
                     <p className="font-medium text-slate-900">{formatFileSize(selectedDocument.file_size || 0)}</p>
@@ -372,15 +429,27 @@ const VerificationCenter = () => {
                 </div>
               </div>
 
-              <div>
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
                   icon={Download}
                   onClick={() => handleDownload(selectedDocument)}
-                  className="w-full"
+                  className="flex-1"
                 >
                   Download Document
                 </Button>
+                {selectedDocument.document_type === 'Ghana Card' && selectedDocument.document_number && (
+                  <Button
+                    variant="outline"
+                    icon={qoreidLoading === selectedDocument.id ? Loader2 : RefreshCw}
+                    onClick={() => handleRunQoreid(selectedDocument)}
+                    disabled={qoreidLoading !== null}
+                    className="flex-1"
+                    title="Run through QoreID to verify against NIA database"
+                  >
+                    {qoreidLoading === selectedDocument.id ? 'Running...' : 'Run QoreID'}
+                  </Button>
+                )}
               </div>
 
               <div>

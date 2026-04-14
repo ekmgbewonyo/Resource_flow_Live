@@ -7,7 +7,7 @@ Use this guide to run it on your laptop after unzipping.
 Quick start (Windows): Open PowerShell in this folder and run .\setup.ps1 once to install everything. 
 Then run .\run-backend.ps1 in one window and .\run-frontend.ps1 in another. 
 Open http://localhost:5173 in your browser.Prerequisites (install these first)RequirementVersionCheck commandPHP8.2 or higherphp -vComposerLatestcomposer -VNode.js18 or higher (LTS recommended)node -vnpmComes with Node.jsnpm -vPostgreSQL14 or higherpsql -VPHP: https://windows.php.net/download/ – add PHP to your system PATH.
-Composer: https://getcomposer.org/download/Node.js: https://nodejs.org/ – use the LTS version.PostgreSQL: https://www.postgresql.org/download/
+Composer: https://getcomposer.org/download/Node.js: https://nodejs.org/ – use the LTSversion.PostgreSQL: https://www.postgresql.org/download/
 
 Quick setup (first time)
 

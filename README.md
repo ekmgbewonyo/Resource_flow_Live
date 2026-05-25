@@ -1,5 +1,5 @@
 ResourceFlow Setup Guide
-Authors: Elikplim Kwao Gbewonyo, Fred Akwei, Bryce Hansen
+Authors: Elikplim Kwao Gbewonyo, Fred Akwei, Bryce Samuel Hanson
 
 This project is a humanitarian aid and resource allocation platform focused on key deliverables including account registration, verification, and basic resource allocation, with:Backend: Laravel 10 (PHP) API – runs on http://localhost:8000Frontend: React 18 + Vite app – runs on http://localhost:5173.
 
